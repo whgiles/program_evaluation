@@ -1,0 +1,52 @@
+---
+title: "Problem Set 1"
+author: "Hunter Giles"
+date: "2022-08-18"
+output: html_document
+---
+
+```{r load-libraries-data, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+cars <- read_csv("data/cars.csv")
+```
+
+
+
+# Learning R
+
+Tell me that you worked through the primers and videos and examples at the example page for this week:
+
+The primers and videos were great!
+
+
+# My first plots
+
+Insert a chunk below and use it to create a scatterplot (hint: `geom_point()`) with diplacement (`displ`) on the x-axis, city MPG (`cty`) on the y-axis, and with the points colored by drive (`drv`).
+
+```{r}
+ggplot(cars, aes(displ, cty)) +
+  geom_point() +
+  labs(title = "Corr: City & Displacement", y = "City", x = "Displacement")
+```
+
+
+Insert a chunk below and use it to create a histogram (hint: `geom_histogram()`) with highway MPG (`hwy`) on the x-axis. Do not include anything on the y-axis (`geom_histogram()` will do that automatically for you). Choose an appropriate bin width. If you're brave, facet by drive (`drv`).
+
+
+```{r}
+ggplot(cars) +
+  geom_histogram(mapping = aes(hwy)) +
+  labs(title = "Highway Dist", x = "highway")
+```
+
+
+# My first data manipulation
+
+Insert a chunk below and use it to calculate the average city MPG (`cty`) by class of car (`class`). This won't be a plot---it'll be a table. Hint: use a combination of `group_by()` and `summarize()`.
+
+```{r}
+df <- cars %>% group_by(class)
+summarise(df, mean = mean(cty))
+```
+
