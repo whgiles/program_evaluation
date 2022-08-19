@@ -1,0 +1,381 @@
+---
+title: "Problem set 2: Regression"
+author: "Hunter Giles"
+date: "September 1, 2022"
+output: 
+  html_document: 
+    toc: yes
+  pdf_document: 
+    latex_engine: xelatex
+    toc: yes
+  word_document: 
+    toc: yes
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(broom)
+library(modelsummary)
+
+# Load penguins data
+penguins <- read_csv("data/penguins.csv")
+```
+
+# Task 1: Penguins
+
+Between 2007 and 2009, researchers collected data on penguins in three islands in the Palmer Archipelago in Antarctica: Biscoe, Dream, and Torgersen. The `penguins` dataset has data for 342 penguins from 3 different species: Chinstrap, Gentoo, and AdÃ©lie. It includes the following variables:
+
+-   `species`: The penguin's species (Chinstrap, Gentoo, and AdÃ©lie)
+-   `island`: The island where the penguin lives (Biscoe, Dream, and Torgersen)
+-   `bill_length_mm`: The length of the penguin's bill, in millimeters (distance from the penguin's face to the tip of the bill)
+-   `bill_depth_mm`: The depth of the penguin's bill, in millimeters (height of the bill; distance from the bottom of the bill to the top of the bill)
+-   `flipper_length_mm`: The length of the penguin's flippers, in millimeters
+-   `body_mass_g`: The weight of the penguin, in grams
+-   `sex`: The sex of the penguin
+-   `year`: The year the observation was made
+
+## Exploratory analysis
+
+What is the relationship between penguin weight and bill depth? This plot shows some initial trends:
+
+```{r plot-penguin-weight-depth}
+ggplot(data = penguins, 
+       aes(x = bill_depth_mm, y = body_mass_g)) +
+  geom_point()
+```
+
+Make a new plot that colors these points by species. What can you tell about the relationship between bill depth and penguin weight?
+
+```{r plot-penguin-weight-depth-by-species}
+ggplot(data = penguins, 
+       aes(x = bill_depth_mm, y = body_mass_g, color = species)) +
+  geom_point()
+```
+
+*There is a positive relationship between bill depth and body mass.*
+
+Add a `geom_smooth()` layer to the plot and make sure it uses a straight line (hint: include `method="lm"` in the function). What does this tell you about the relationship between bill depth and body mass?
+
+```{r plot-penguin-weight-depth-by-species-with-lines}
+ggplot(data = penguins, 
+       aes(x = bill_depth_mm, y = body_mass_g, color = species)) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+
+*The lines show the average increase in body mass as bill depth increases for a given species.*
+
+Change the plot so that there's a single line for all the points instead of one line per species. How does the slope of this single line differ from the slopes of the species specific lines? ***Why??***
+
+```{r plot-penguin-weight-depth-by-species-with-one-line}
+ggplot(data = penguins, 
+       aes(x = bill_depth_mm, y = body_mass_g)) +
+  geom_point(mapping = aes(color = species)) +
+  geom_smooth(method = lm)
+```
+
+*This lines shows that there is a negative relationship between bill depth and body mass. From this visual we can infer that species biases the relationship.*
+
+What is the relationship between flipper length and body mass? Make another plot with `flipper_length_mm` on the x-axis, `body_mass_g` on the y-axis, and points colored by `species`.
+
+```{r}
+ggplot(data = penguins, 
+       aes(x = flipper_length_mm, y = body_mass_g, color = species)) +
+  geom_point() 
+```
+
+*There is a positive relationship between flipper length and body mass.*
+
+Facet the plot by island (`island`)
+
+```{r}
+ggplot(data = penguins,
+       aes(x = flipper_length_mm, y = body_mass_g, color = species)) +
+  geom_point() +
+  facet_wrap(vars(island))
+```
+
+Tell a story about the relationship between flipper length and weight in these three penguin species.
+
+*There is a positive correlation between body mass and flipper length for all species. On average the Gentoo species weighs more and has bigger flippers, while the Adelie and Chinstrap are smaller birds.*
+
+Tell a story about the distribution of penguins across the three islands.
+
+*The Adelie seems to be the most versatile bird, they live on all three islands, while Chinstrap and Gentoo are restricted to their respective habitats.*
+
+## Models
+
+### Predicting weight with bill depth
+
+Does bill depth predict penguin weight?
+
+```{r model-depth-weight}
+model_depth_weight <- lm(body_mass_g ~ bill_depth_mm,
+                         data = penguins)
+
+tidy(model_depth_weight, conf.int = TRUE)
+```
+
+```{r model-details-depth-weight}
+glance(model_depth_weight)
+```
+
+INTERPRET THE COEFFICIENTS AND RESULTS HERE. What happens as bills get taller? Is the association statistically significant? How confident are you about these results? (Hint: look at the $R^2$)
+
+*On average, as bill_depth increases by 1 mm, body_mass significantly decreases by 191 grams (p\<.001). However, the simple regression only explains 22% of the variation (R\^2 = .22), so we can infer that the model may suffer from an omitted variable problem.*
+
+### Predicting weight with bill depth and flipper length
+
+RUN A MODEL that predicts weight with bill depth and flipper length (i.e. body_mass_g \~ bill_depth_mm + flipper_length_mm)
+
+```{r model-weight-depth-flipper}
+reg1 <- lm(body_mass_g ~ bill_depth_mm + flipper_length_mm, data = penguins)
+```
+
+```{r model-details-weight-depth-flipper}
+glance(reg1)
+```
+
+INTERPRET THESE RESULTS. Did the size of the bill depth coefficient change after controlling for flipper length?
+
+*On average, as bill_depth increases by 1mm, body_mass increases by 22.6 grams at a .10 significance level. 1 mm increase in flipper_length increases body_mass by 51.5 grams (p\<.01). The previous model's omitted variable, flipper_length, biased down the bill_depth coefficient.*
+
+### Predicting weight with bill depth, flipper length, and species
+
+RUN A MODEL that predicts weight with bill depth, flipper length, and species.
+
+```{r model-weight-depth-flipper-species}
+reg2 <- lm(body_mass_g ~ bill_depth_mm + flipper_length_mm + species, data = penguins)
+```
+
+```{r model-details-weight-depth-flipper-species}
+glance(reg2)
+```
+
+INTERPRET THESE RESULTS. What do the species coefficients mean? Did the bill depth coefficient change after controlling for both flipper length and species?
+
+*In this model the Adelie species is used as a reference, so, on average, the Chinstrap is 131.97 grams lighter than the Adelie and the Gentoo is 1288 grams heavier. From the above results, we can see that species biases the bill_depth coefficient down when omitted.*
+
+## All models at the same time
+
+```{r all-penguin-models}
+# Right now there's only one model here. Add the others from above (whatever you
+# called them) like so: 
+modelsummary(list(model_depth_weight, reg1, reg2))
+```
+
+------------------------------------------------------------------------
+
+# Task 2: Food access and mortality
+
+```{r load-food-mortality-data}
+# Make sure you look at this dataset by clicking on its name in the Environment
+# panel in RStudio. Sort some of the different columns and look around to get a
+# feel for what's in the data
+food_health <- read_csv("data/food_health_politics.csv") 
+```
+
+We're interested in looking at the relationships between food access, mortality, and politics. Do do this, we look at data from three different sources:
+
+-   The USDA's [Food Environment Atlas](https://www.ers.usda.gov/data-products/food-environment-atlas/documentation/)
+-   The CDC's ["Compressed Mortality File 1999-2015 Series 20 No. 2U, 2016"](http://wonder.cdc.gov/cmf-icd10.html)
+-   2016 election results (found all over the internet)
+
+Each row in the dataset is a US county. The main outcome we care about is `mortality_rate`, or the number of deaths per 100,000 people in a county between 2013-2015. Other interesting variables in the dataset include:
+
+-   `pct_low_access_pop`: Percent of the county's population with low access to food
+-   `pct_children_low_access`: Percent of the county's children with low access to food
+-   `grocery_stores_per_1000`: Number of grocery stores in a county (per 1,000 residents)
+-   `snap_stores_per_1000`: Number of stores that accept SNAP (food stamps) in a county (per 1,000 residents)
+-   `fastfood_per_1000`: Number of fast food stores in a county (per 1,000 residents)
+-   `per_dem_2012`: Percent of the county that voted for Obama in 2012
+-   `per_dem_2016`: Percent of the county that voted for Clinton in 2016
+
+## Exploratory analysis
+
+### How related are mortality rate and access to food?
+
+```{r cor-mortality-food}
+# Notice how this is a little different from what was in the complete example
+# with SAT scores. It's not possible to calculate correlations when there is
+# missing data. The `use = "complete.obs"` argument here tells R to ignore any
+# rows where either mortality_rate or pct_low_access_pop is missing
+cor(food_health$mortality_rate, food_health$pct_low_access_pop,
+    use = "complete.obs")
+```
+
+SAY SOMETHING HERE. This is backwards from what you might expect, since it trends downward (i.e. the mortality rate is lower in counties with a greater proportion of the population with low access to food). Why might that be? Is there really a relationship?
+
+*Intuitively, if the population has less access to food, then the mortality rate should increase. The negative relationship above is relatively weak, so there is likely another variable influencing this relationship.*
+
+```{r plot-mortality-food, warning=FALSE}
+# Use warning=FALSE in the chunk options to remove the warning about missing data
+ggplot(food_health, aes(x = pct_low_access_pop, y = mortality_rate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "% of county with low access to food", 
+       y = "Mortality rate (per 100,000 residents)")
+```
+
+### How related are mortality rate and the prevalence of fast food restaurants?
+
+```{r cor-mortality-fastfood}
+cor(food_health$mortality_rate, food_health$fastfood_per_1000,
+    use = "complete.obs")
+```
+
+SAY SOMETHING HERE
+
+*Mortality rate and number of fastfood restaurants have a weak negative correlation. This makes since, while fastfood does help hunger, it also increases the risk of cardiovascular disease. The two opposing effects cancel out.*
+
+```{r plot-mortality-fastfood}
+ggplot(food_health, aes(x = fastfood_per_1000, y = mortality_rate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Number of fast food stores in a county (per 1,000 residents)", 
+       y = "Mortality rate (per 100,000 residents)")
+```
+
+### How related are mortality rate and the prevalence of SNAP stores per 1,000 residents?
+
+```{r cor-mortality-snap}
+cor(food_health$mortality_rate, food_health$snap_stores_per_1000, 
+    use = "complete.obs")
+```
+
+SAY SOMETHING HERE
+
+*Mortality and number of store that accept snap have a moderate positive correlation. Counties that accept SNAP are likely to be poor which increases mortality.*
+
+```{r plot-mortality-snap}
+ggplot(food_health, aes(x = snap_stores_per_1000, y = mortality_rate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Number of stores that accept SNAP (per 1,000 residents)", 
+       y = "Mortality rate (per 100,000 residents)")
+```
+
+### How related are mortality rate and the percent of the county that voted for Democrats in 2016?
+
+```{r cor-mortality-2016}
+cor(food_health$mortality_rate, food_health$votes_dem_2016, 
+    use = "complete.obs")
+```
+
+SAY SOMETHING HERE
+
+*There is a weak negative correlation between mortality rates and the number of democratic votes in 2016.*
+
+```{r plot-mortality-2016}
+ggplot(food_health, aes(x = votes_dem_2016, y = mortality_rate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(x = "Percent of the county that voted for Clinton in 2016", 
+       y = "Mortality rate (per 100,000 residents)")
+```
+
+## Models
+
+### Does access to food predict mortality?
+
+SAY SOMETHING HERE
+
+*Intuitively, low access to food should have a causal relationship with mortality. However, the above analysis only shows correlation.*
+
+```{r model-mortality-food}
+model_mortality_food <- lm(mortality_rate ~ pct_low_access_pop,
+                           data = food_health)
+
+tidy(model_mortality_food, conf.int = TRUE)
+# View(select(food_health, mortality_rate, pct_low_access_pop))
+```
+
+```{r model-details-mortality-food}
+glance(model_mortality_food)
+```
+
+INTERPRET THE COEFFICIENTS AND RESULTS HERE. What happens as the percent of low access to food goes up by 1%? Is that significant? Again, this is backwards from what you'd expect---as the percent of low access goes up, mortality drops. Why might that be? How much do you trust this finding? (Hint: look at the R2 value)
+
+*On average, as pct_low_access_pop increases by 1%, the county's mortality rate drops by 1.24 (p\<.001). The results seem backwards. This simple regression accounts for only 2.6% of the variation in mortality, meaning there are other variables biasing the pct_low_access_pop coefficient.*
+
+### Do more SNAP stores per person predict mortality?
+
+```{r model-mortality-snap}
+reg5 <- lm(data=food_health, mortality_rate ~ snap_stores_per_1000)
+tidy(reg5, conf.int = TRUE)
+```
+
+```{r model-details-mortality-snap}
+glance(reg5)
+#View(select(food_health, mortality_rate, snap_stores_per_1000))
+```
+
+SAY SOMETHING HERE. What happens as the proportion of SNAP stores goes up? Do you trust this number more or less than low access to food?'
+
+*As snap_stores_per_1000 increases by 1, the mortality rate rises by 174. snap_stores_per_1000 is a much better predictor than pct_low_access_pop. We can infer this by looking at this model's R\^2 score (R\^2 = .19). Intuitively, this makes sense. SNAP stores ate primarily in lower class locations, which have higher criminal activity, lower quality education, etc.*
+
+### Do election results and access to food and SNAP stores predict mortality?
+
+RUN A MODEL THAT PREDICTS MORTALITY WITH A BUNCH OF COVARIATES (i.e. mortality_rate \~ pct_low_access_pop + snap_stores_per_1000 + per_dem_2016 + anything else you want to throw in)
+
+```{r model-mortality-lots-of-things}
+reg6 <- lm(mortality_rate ~ pct_low_access_pop + snap_stores_per_1000 + per_dem_2016 + grocery_stores_per_1000, data = food_health)
+tidy(reg6, conf.int = TRUE)
+```
+
+```{r model-details-mortality-lots-of-things}
+glance(reg6)
+#View(select(food_health, mortality_rate, pct_low_access_pop, snap_stores_per_1000, per_dem_2016, grocery_stores_per_1000 ))
+```
+
+SAY SOMETHING HERE. Interpret the different coefficients. How predictive is this model (i.e. what's the R2)? Do you believe this model?
+
+*On Average, as pct_low_access_pop increases by 1%, mortality rate decreases by .86. As snap_stores_per_1000 increases by 1, mortality rate increases by 217. As per_dem_2016 increases by 1%, mortality rate decreases by 1.8. As grocery_stores_per_1000 increases by 1, mortality rate decreases by 220.89. This model accounts for 34.13% of the variation in mortality rate. The the models robustness has greatly increases from the simple regressions, so I am more likely to believe this one.*
+
+### Mortality, contolling for state differences
+
+RUN A MODEL with some number of plausible independent/explanatory variables. Include `state` as one of them
+
+```{r model-mortality-state}
+# Add other explanatory variables here
+model_with_state <- lm(mortality_rate ~ pct_low_access_pop + state + snap_stores_per_1000 ,
+                       data = food_health)
+
+# This table is 50+ rows long! While it might be interesting to see changes in
+# intercept in relation to Alaska (the omitted state here), like how Alabama's
+# mortality rate is 137 higher than Alaska's while DC's is 84 lower, it's not
+# super helpful. Controlling for state does capture some of the state-specific
+# reasons for varying mortality though, so it's good to include. We just don't
+# really need to see all those coefficients. To remove them from this table of
+# results, filter them out. The "!" in R means "not", so here we're only looking
+# at rows that don't start with "state"
+tidy(model_with_state, conf.int = TRUE) %>% 
+  filter(!str_starts(term, "state"))
+```
+
+```{r model-state-mortality-lots-of-things}
+glance(model_with_state)
+```
+
+SAY SOMETHING ABOUT THIS MODEL
+
+*By including state fixed effects, we are about to account for 48% of the variation in mortality rate.*
+
+## All models at the same time
+
+PUT ALL THE MODEL RESULTS IN THE SAME SIDE-BY-SIDE TABLE HERE
+
+```{r everything-together}
+# Right now there are only two models here. Add the others from above (whatever 
+# you called them) like so: 
+# modelsummary(list(model_mortality_food, some_other_model, yet_another_model, etc))
+
+# Also, by default, modelsummary will include all the state coefficients, which
+# we don't want. We can omit specific coefficients with the `coef_omit`
+# argument. The ^ character means it'll omit coefficients that *start with*
+# "state". Without ^, it would omit any coefficient where the characters "state"
+# appeared anywhere in the name, which might be too greedy
+
+modelsummary(list(model_mortality_food, model_with_state, reg5, reg6),
+             coef_omit = "^state")
+```
