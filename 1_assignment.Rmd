@@ -2,13 +2,17 @@
 title: "Problem Set 1"
 author: "Hunter Giles"
 date: "2022-08-18"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
 ---
 
 ```{r load-libraries-data, warning=FALSE, message=FALSE}
 library(tidyverse)
 
 cars <- read_csv("data/cars.csv")
+
 ```
 
 
