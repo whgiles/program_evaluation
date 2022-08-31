@@ -1,14 +1,14 @@
 ---
 title: "Problem set 3: RCTs, matching, and inverse probability weighting"
 author: "W. Hunter Giles"
-date: "\September 10th, 2022"
+date: "September 10th, 2022"
 output: 
-  html_document: 
+  word_document: 
     toc: yes
   pdf_document: 
     latex_engine: xelatex
     toc: yes
-  word_document: 
+  html_document: 
     toc: yes
 ---
 
@@ -25,7 +25,7 @@ These datasets contain the following variables:
 -   `id`: A unique ID number for each household
 -   `water_bill`: The family's average monthly water bill, in dollars
 -   `barrel`: An indicator variable showing if the family participated in the program
--   `barrel_num`: A 0/1 numeric version of `barrel`
+-   `barrel`: A 0/1 numeric version of `barrel`
 -   `yard_size`: The size of the family's yard, in square feet
 -   `home_garden`: An indicator variable showing if the family has a home garden
 -   `home_garden_num`: A 0/1 numeric version of `home_garden`
@@ -52,6 +52,8 @@ library(tidyverse)
 library(broom)
 library(patchwork)
 library(MatchIt)
+library(modelsummary)
+
 
 barrels_rct <- read_csv("data/barrels_rct.csv") %>% 
   # This makes it so "No barrel" is the reference category
@@ -103,7 +105,8 @@ ggplot(barrels_rct) +
 
 It looks like the distributions of environmental attitude are about the same between the treatment and control group, however, there seems to be more people in the barrels category.
 
-```{r}
+
+```{r message=FALSE, warning=FALSE}
 waterbill_summary <- ggplot(barrels_rct, mapping = aes(x = barrel, y = water_bill, color = barrel)) +
   stat_summary(geom = "pointrange", fun.data = "mean_se", fun.args = list(mult = 1.96)) +
   guides(color = "none") +
@@ -129,7 +132,6 @@ df <- barrels_rct %>% group_by(barrel) %>% summarise(mean = mean(water_bill))
 abs(df$mean[1] - df$mean[2])
 ```
 
-
 # 2. Finding causation from observational data
 
 ## Naive difference in means
@@ -139,8 +141,10 @@ abs(df$mean[1] - df$mean[2])
 ```{r}
 # Find the naive difference in means
 
+naive_model <- lm(water_bill ~ barrel_num, 
+                  data = barrels_obs)
+tidy(naive_model)
 ```
-
 ## Adjustment with Mahalanobis nearest-neighbor matching
 
 **Use matching to make the proper adjustments and close the backdoor effects from the four main confounders: `yard_size`, `home_garden`, `attitude_env`, and `temperature`**
@@ -149,21 +153,45 @@ abs(df$mean[1] - df$mean[2])
 # Insert as many chunks as you need to close the backdoors by using nearest
 # neighbor matching with Mahalanobis distance.
 
-matchit(water_bill ~ barrel_num, 
-        data = barrels_obs,
-        method = "nearest",
-        distance = "mahalnobis",
-        replace = TRUE)
+matched_data <- matchit( barrel_num ~ yard_size + home_garden_num + attitude_env + temperature, 
+                         data = barrels_obs,
+                         method = "nearest",
+                         distance = "mahalanobis",
+                         replace = TRUE)
+
+matched_data_for_real <- match.data(matched_data)
+
+matched_model <- lm(water_bill ~ barrel_num, 
+                    data = matched_data_for_real,
+                    weights = weights)
+tidy(matched_model)
+
 ```
 
 ## Adjustment with inverse probability weighting
 
 **Use inverse probability weighting to make the proper adjustments and close the backdoor effects from the four main confounders: `yard_size`, `home_garden`, `attitude_env`, and `temperature`**
 
-```{r}
+```{r inverse probability weighting}
 # Insert as many chunks as you need to close the backdoors by using propensity
 # scores and inverse probability weighting.
+logit_model <- glm(barrel_num ~ yard_size + home_garden_num + attitude_env + temperature,
+                   data = barrels_obs,
+                   family = binomial(link = "logit"))
+
+barrel_ipw <- augment_columns(logit_model, 
+                              barrels_obs, 
+                              type.predict = "response") %>% 
+  mutate(weight = (barrel_num / .fitted) + ((1-barrel_num)/(1-.fitted)))
+
+
+ipw_model <- lm(water_bill ~ barrel_num, 
+                    data = barrel_ipw,
+                    weights = weight)
+
+tidy(ipw_model)
 ```
+
 
 # 3. Comparing results
 
@@ -171,6 +199,13 @@ You just calculated a bunch of ATEs using experimental and observational data. *
 
 ```{r}
 # Table with all model results side-by-side
+modelsummary(list(
+  "Naive" = naive_model,
+  "Matched w/ weights" = matched_model,
+  "IPW truncated" = ipw_model))
 ```
 
 **Which estimates do you believe? Why? Would observational ATEs be sufficient to prove program effect in this case? Why or why not? Should this program be rolled out throughout Georgia? Why or why not?**
+
+From the 4 estimates above, the most sophisticated model is the RCT. Since the treatment and control group are randomly selected, I can assume that the treatment effect is unbiased. This is because all other confounding variables should cancel out. The IPW and matching only control for yard size, home garden, environmental attitude, and temperature. However, it is still a good robustness check.
+From the data, we can see that the barrel program significantly decreases water bills. Since a RCT model is used, we have a good case for optimal external validity, so this program should be used.
