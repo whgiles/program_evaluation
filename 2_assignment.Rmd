@@ -3,12 +3,12 @@ title: "Problem set 2: Regression"
 author: "Hunter Giles"
 date: "September 1, 2022"
 output: 
-  html_document: 
+  word_document: 
     toc: yes
   pdf_document: 
     latex_engine: xelatex
     toc: yes
-  word_document: 
+  html_document: 
     toc: yes
 ---
 
@@ -16,6 +16,7 @@ output:
 library(tidyverse)
 library(broom)
 library(modelsummary)
+
 
 # Load penguins data
 penguins <- read_csv("data/penguins.csv")
