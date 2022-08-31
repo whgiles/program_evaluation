@@ -105,6 +105,7 @@ ggplot(barrels_rct) +
 
 It looks like the distributions of environmental attitude are about the same between the treatment and control group, however, there seems to be more people in the barrels category.
 
+
 ```{r message=FALSE, warning=FALSE}
 waterbill_summary <- ggplot(barrels_rct, mapping = aes(x = barrel, y = water_bill, color = barrel)) +
   stat_summary(geom = "pointrange", fun.data = "mean_se", fun.args = list(mult = 1.96)) +
@@ -139,11 +140,11 @@ abs(df$mean[1] - df$mean[2])
 
 ```{r}
 # Find the naive difference in means
+
 naive_model <- lm(water_bill ~ barrel_num, 
                   data = barrels_obs)
 tidy(naive_model)
 ```
-
 ## Adjustment with Mahalanobis nearest-neighbor matching
 
 **Use matching to make the proper adjustments and close the backdoor effects from the four main confounders: `yard_size`, `home_garden`, `attitude_env`, and `temperature`**
@@ -164,6 +165,7 @@ matched_model <- lm(water_bill ~ barrel_num,
                     data = matched_data_for_real,
                     weights = weights)
 tidy(matched_model)
+
 ```
 
 ## Adjustment with inverse probability weighting
@@ -189,6 +191,7 @@ ipw_model <- lm(water_bill ~ barrel_num,
 
 tidy(ipw_model)
 ```
+
 
 # 3. Comparing results
 
