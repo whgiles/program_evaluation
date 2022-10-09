@@ -86,11 +86,19 @@ The treatment and control group have roughly the same number of observations in 
 
 **Check the balance of the main pre-treatment characteristics. Are you happy with the balance?**
 
+Home garden frequency is about the some in treatment and control.
 ```{r message=FALSE, warning=FALSE}
 # Insert as many chunks as you need to check the balance of the RCT across
 # different pre-treatment characteristics like yard size, home garden,
 # environmental attitudes, and average temperature.
 barrels_rct %>% group_by(barrel,home_garden) %>% summarise(cnt = n()) %>% mutate(freq = cnt / sum(cnt))
+```
+
+environmental attitide is relatively balanced
+```{r}
+barrels_rct %>% group_by(barrel) %>% summarise(
+                                               mean= mean(attitude_env)) 
+  
 ```
 
 This seems balanced to me.
@@ -104,7 +112,6 @@ ggplot(barrels_rct) +
 ```
 
 It looks like the distributions of environmental attitude are about the same between the treatment and control group, however, there seems to be more people in the barrels category.
-
 
 ```{r message=FALSE, warning=FALSE}
 waterbill_summary <- ggplot(barrels_rct, mapping = aes(x = barrel, y = water_bill, color = barrel)) +
@@ -145,6 +152,7 @@ naive_model <- lm(water_bill ~ barrel_num,
                   data = barrels_obs)
 tidy(naive_model)
 ```
+
 ## Adjustment with Mahalanobis nearest-neighbor matching
 
 **Use matching to make the proper adjustments and close the backdoor effects from the four main confounders: `yard_size`, `home_garden`, `attitude_env`, and `temperature`**
@@ -192,7 +200,6 @@ ipw_model <- lm(water_bill ~ barrel_num,
 tidy(ipw_model)
 ```
 
-
 # 3. Comparing results
 
 You just calculated a bunch of ATEs using experimental and observational data. **Put them all in a single table here:**
@@ -207,5 +214,4 @@ modelsummary(list(
 
 **Which estimates do you believe? Why? Would observational ATEs be sufficient to prove program effect in this case? Why or why not? Should this program be rolled out throughout Georgia? Why or why not?**
 
-From the 4 estimates above, the most sophisticated model is the RCT. Since the treatment and control group are randomly selected, I can assume that the treatment effect is unbiased. This is because all other confounding variables should cancel out. The IPW and matching only control for yard size, home garden, environmental attitude, and temperature. However, it is still a good robustness check.
-From the data, we can see that the barrel program significantly decreases water bills. Since a RCT model is used, we have a good case for optimal external validity, so this program should be used.
+From the 4 estimates above, the most sophisticated model is the RCT. Since the treatment and control group are randomly selected, I can assume that the treatment effect is unbiased. This is because all other confounding variables should cancel out. The IPW and matching only control for yard size, home garden, environmental attitude, and temperature. However, it is still a good robustness check. From the data, we can see that the barrel program significantly decreases water bills. Since a RCT model is used, we have a good case for optimal external validity, so this program should be used.
