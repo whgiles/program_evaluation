@@ -70,6 +70,8 @@ barrels_obs <- read_csv("data/barrels_observational.csv") %>%
 
 You remember from PMAP 8521 that when running an RCT, you can draw the DAG for the program like this (Figure 2). **Why?**
 
+The treatment is randomly selected, so there is nothing biasing the selection. This is way there are no arrows pointed at the *Rain barrel* variable.
+
 ![Rain barrel program DAG as an RCT](out/barrel-dag-rct.png)
 
 ## Check balance
@@ -94,10 +96,10 @@ Home garden frequency is about the some in treatment and control.
 barrels_rct %>% group_by(barrel,home_garden) %>% summarise(cnt = n()) %>% mutate(freq = cnt / sum(cnt))
 ```
 
-environmental attitide is relatively balanced
+environmental attitude is relatively balanced
 ```{r}
-barrels_rct %>% group_by(barrel) %>% summarise(
-                                               mean= mean(attitude_env)) 
+barrels_rct %>% group_by(barrel) %>% summarise(cnt = n(),
+                                               mean= mean(attitude_env)) %>% mutate(freq = cnt /sum(cnt))
   
 ```
 
@@ -131,6 +133,7 @@ There is a difference in means which is ok because water_bill is the dependent v
 ## Estimate difference
 
 **What is the effect of the program on participants' water bills? How credible is this result?**
+The RCT results show that the treatment causes a 40 dollar decrease in families' water bills, on average. These results are credible becuases the treatment effect is unbiased.
 
 ```{r}
 # Insert as many chunks as you need to measure the difference in water bills for
@@ -144,6 +147,8 @@ abs(df$mean[1] - df$mean[2])
 ## Naive difference in means
 
 **As a baseline measure, calculate the average difference in water bills for those in the program and those not in the program using the observational data. How much of an effect is there? How credible is this result? Why?**
+
+The naive shows a $29 decrease in water bill cost. However, this is biases because confounding variables are not being controlled for. This means that there is likely something influencing a persons selection into the treatment.
 
 ```{r}
 # Find the naive difference in means
