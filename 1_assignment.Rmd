@@ -11,7 +11,7 @@ output:
 ```{r load-libraries-data, warning=FALSE, message=FALSE}
 library(tidyverse)
 
-cars <- read_csv("data/cars.csv")
+cars <- read_csv("../data/cars.csv")
 
 ```
 

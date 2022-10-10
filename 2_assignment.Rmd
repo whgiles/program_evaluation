@@ -19,7 +19,7 @@ library(modelsummary)
 
 
 # Load penguins data
-penguins <- read_csv("data/penguins.csv")
+penguins <- read_csv("../data/penguins.csv")
 ```
 
 # Task 1: Penguins
