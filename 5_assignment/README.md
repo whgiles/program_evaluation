@@ -549,8 +549,18 @@ grouping by `same_block`, group by `more_than_two_away`).
 ``` r
 did_hand.2 <- terror %>% 
   group_by(more_than_two_away, after) %>%
-  summarise(avg_car_theft = mean(car_theft)) %>% spread(key = after, value = avg_car_theft)
+  summarise(avg_car_theft = mean(car_theft)) %>% 
+  spread(key = after, value = avg_car_theft)
+
+did_hand.2
 ```
+
+    # A tibble: 2 × 3
+    # Groups:   more_than_two_away [2]
+      more_than_two_away `FALSE` `TRUE`
+                   <dbl>   <dbl>  <dbl>
+    1                  0  0.0824 0.0953
+    2                  1  0.0814 0.108 
 
 Subtract the diff-in-diff effect for “same_block × after” from Model C
 from the average in the control group to find the average number of car
@@ -564,11 +574,7 @@ attack across treatment and control blocks (hint: the answer is in the
 third full paragraph on p. 123 of the original article).
 
 ``` r
-did_hand.2 <- did_hand.2 %>%
-  mutate(per_change_log = log(`TRUE`/`FALSE`)) %>%
-  mutate(per_change = (`TRUE`-`FALSE`)/`FALSE`)
-
-diff(did_hand.2$per_change) 
+((0.10785+0.08080) - 0.10785)/0.10785
 ```
 
-    [1] 0.1679278
+    [1] 0.7491887
