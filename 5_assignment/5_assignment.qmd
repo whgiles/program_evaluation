@@ -1,7 +1,11 @@
 ---
 title: "Problem Set 5"
 author: "W. Hunter Giles"
-format: html
+format: 
+
+    gfm: 
+      toc: true
+prefer-html: true
 editor: visual
 ---
 
@@ -9,20 +13,20 @@ In 2004, Rafael Di Tella and Ernesto Schargrodsky published a study that analyze
 
 The dataset I've provided (`MonthlyPanel.dta`) is a Stata data file nearly 10,000 observations. It comes directly from [Di Tella and Schargrodsky's data appendix available at their study's *AER* webpage](https://www.aeaweb.org/articles?id=10.1257/000282804322970733). This is non-experimental data that includes counts of car thefts for every city block in Buenos Aires from April to December 1994. There are 12 variables:
 
-- `observ` (we'll rename to `block`): The ID number of the block
-- `barrio`: The barrio (neighborhood) for the block
-- `calle`: The street for the block
-- `altura`: The street number
-- `institu1` (we'll rename to `same_block`): Indicator variable marking if there's a Jewish institution on the block (1 if yes, 0 if no)
-- `institu3`: Indicator variable marking if there's a Jewish institution within one block (1 if yes, 0 if no)
-- `distanci` (we'll rename to `distance`): Distance to the nearest Jewish institution, measured in blocks
-- `edpub`: Indicator variable marking if there's an educational building or embassy on the block (1 if yes, 0 if no)
-- `estserv`: Indicator variable marking if there's a gas station on the block (1 if yes, 0 if no) 
-- `banco`: Indicator variable marking if there's a bank on the block (1 if yes, 0 if no) 
-- `totrob` (we'll rename to `car_theft`): Total number of car robberies
-- `mes` (we'll rename to `month`): Month
+-   `observ` (we'll rename to `block`): The ID number of the block
+-   `barrio`: The barrio (neighborhood) for the block
+-   `calle`: The street for the block
+-   `altura`: The street number
+-   `institu1` (we'll rename to `same_block`): Indicator variable marking if there's a Jewish institution on the block (1 if yes, 0 if no)
+-   `institu3`: Indicator variable marking if there's a Jewish institution within one block (1 if yes, 0 if no)
+-   `distanci` (we'll rename to `distance`): Distance to the nearest Jewish institution, measured in blocks
+-   `edpub`: Indicator variable marking if there's an educational building or embassy on the block (1 if yes, 0 if no)
+-   `estserv`: Indicator variable marking if there's a gas station on the block (1 if yes, 0 if no)
+-   `banco`: Indicator variable marking if there's a bank on the block (1 if yes, 0 if no)
+-   `totrob` (we'll rename to `car_theft`): Total number of car robberies
+-   `mes` (we'll rename to `month`): Month
 
----
+------------------------------------------------------------------------
 
 ```{r setup, warning=FALSE, message=FALSE}
 library(tidyverse)     # For ggplot, %>%, mutate, filter, group_by, and friends
@@ -36,7 +40,7 @@ library(modelsummary)  # For side-by-side regression tables
 options(dplyr.summarise.inform = FALSE)
 
 # Load terror data
-terror <- read_stata("data/MonthlyPanel.dta") %>% 
+terror <- read_stata("../data/MonthlyPanel.dta") %>% 
   # The attack happened on July 18. The authors omitted data from July 19-31, so
   # all July observations are from before the attack. Make a new indicator
   # variable `after` to mark if the row is from before or after the attack
@@ -63,109 +67,109 @@ terror <- read_stata("data/MonthlyPanel.dta") %>%
 
 **Imagine you went out and collected data on the presence of police in each city, and the amount of crime in each city, and found a positive relationship. Does this mean police *cause* crime? Explain.**
 
-Answer here.
-
+*No, an increase in crime can cause and increase in police presents, while an increase in police presence can cause crime to fall. From reverse causality, it is difficult to claim one causes the other.*
 
 Di Tella and Ernesto Schargrodsky explore this question with a difference-in-difference design. They collected data on both the presence of police and car robberies in Buenos Aires city blocks both before and after the attack. Their interest is in seeing whether the extra police reduced the amount of car theft. **How is this data suitable for a diff-in-diff design? What would we be comparing here? Be specific about the pre/post treatment/control groups.**
 
-Answer here.
+*The researcher exploit the terror attack by creating a difference and difference model. Before the attack, police presents was consistent (constant or random) for city blocks, after the attack, police presence increased for blocks with Jewish institutions. The treatment is the increase in police presence. Assuming parallel trends, the first derivative crime rate was the same in blocks both with and with out Jewish institutions.*
 
+*The treatment group are blocks with Jewish institutions, and the control group are those without. After the attach, the treatment group will be subjected to the treatment. The two differences are taken to estimate the ATE.*
 
 **Why does it help the researchers that the police were dispatched to certain blocks *because of terrorist attacks?***
 
-Answer here.
-
-
+*The researchers can now control for time (after).*
 
 # 2. Trends
 
 One of the most crucial assumptions for difference-in-differences designs is the idea that the trends in the treatment and control groups need to be parallel prior to the intervention or program. **Why?**
 
-Answer here.
+If the treatment and control group have parallel trends, then the treatment and control are comparable in the pre-treatment stage.
 
-
-Create a plot that shows the average number of car thefts per month for blocks with synagogues and blocks without (Hints: it'll be easiest if you make a smaller dataset using `group_by()` and `summarize()` and then plot that smaller dataset with `ggplot()` Make sure you group by `month` and `same_block_factor`. Add `group = same_block_factor` as an aesthetic so the line goes across the categorical months on the x-axis). Add a vertical line (`geom_vline(xintercept = "7")`) in the month where the terror attack happened. 
+Create a plot that shows the average number of car thefts per month for blocks with synagogues and blocks without (Hints: it'll be easiest if you make a smaller dataset using `group_by()` and `summarize()` and then plot that smaller dataset with `ggplot()` Make sure you group by `month` and `same_block_factor`. Add `group = same_block_factor` as an aesthetic so the line goes across the categorical months on the x-axis). Add a vertical line (`geom_vline(xintercept = "7")`) in the month where the terror attack happened.
 
 **What would you say about the parallel trends assumption here? Does it hold up? Maybe? Maybe not?**
 
-Answer here
+*From the graph below, We can see that the parallel trends assumption does not hold.*
 
 ```{r plot-trends}
-# Make a plot here
-```
+car_theft_by_group <- terror %>% 
+  group_by(same_block_factor, month) %>% 
+  summarise(avg_car_theft=mean(car_theft))
 
+ggplot(data=car_theft_by_group) +
+  geom_point(mapping = aes(x=month, y=avg_car_theft, color = same_block_factor)) +
+  geom_line(mapping = aes(x=month, y=avg_car_theft, color = same_block_factor, group = same_block_factor)) +
+  geom_vline(xintercept = "7") +
+    labs(title = "Averge Car Thefts by Block", x = "Months", y = "Average Car Thefts", color = "Jewish Institution")
+```
 
 # 3. Difference-in-differences by hand-ish
 
-Calculate the average number of car thefts in the treatment and control groups before and after the attack. (Hint: group by `same_block` and `after` and find the average of `car_theft`.) 
+Calculate the average number of car thefts in the treatment and control groups before and after the attack. (Hint: group by `same_block` and `after` and find the average of `car_theft`.)
 
 ```{r manual-diff-diff}
-# Calculate average of car_theft across same_block and after
-
+did_hand <- terror %>% 
+  group_by(same_block_factor, after) %>%
+  summarise(avg_car_theft = mean(car_theft)) %>% spread(key = after, value = avg_car_theft)
 ```
-
-Calculate the difference-in-difference estimate given these numbers.
 
 |                         | Before attack | After attack | Difference |
 |-------------------------|---------------|--------------|------------|
-| Block without synagogue |               |              |            |
-| Block with synagogue    |               |              |            |
-| Difference              |               |              |            |
+| Block without synagogue | 0.0815        | 0.1047       | -0.0231    |
+| Block with synagogue    | 0.0895        | 0.0351       | 0.0543     |
+| Difference              | -0.0079       | 0.0695       | -0.0774    |
 
-Answer these questions (you don't have to write your answers in list form---a paragraph is fine:
-
-- **How did car thefts change from before-to-after in blocks *without* synagogues?**
-- **How did car thefts change from before-to-after in blocks *with* synagogues?**
-- **What's the difference-in-differences?**
-- **What does that mean? Interpret the finding.**
-
+After the treatment period, the treatment group car had 0.0543 less car thefts, and the control group had 0.0231 more car thefts. The effect of the treatment on the treatment group decreased car thefts by 0.0774.
 
 # 4. Difference-in-differences with regular OLS
 
 Run a regression model to find the diff-in-diff estimate of the effect of the increased police presence (`after`) on car thefts (`car_theft`) (hint: remember that you'll be using an interaction term).
 
 ```{r simple-diff-diff-model}
-# Code here
+did <- lm(car_theft ~ (after*same_block_factor), data=terror)
+tidy(did)
 ```
 
 **How does this value compare with what you found in part 3 earlier? What is the advantage of doing this instead of making a table?**
 
-Answer here.
-
+Form the regression table above, we can see that that coefficients are the same as when the calculations are done by hand. The advantage of the regression, the level of significance is displayed, in this case level of ATE significance is p \< .05.
 
 # 5. Difference-in-differences with fixed effects OLS
 
 The diff-in-diff coefficient you found in part 4 is accurate, but the standard errors and $R^2$ are wrong (run `glance()` on your model object to see how tiny the $R^2$ is)! This is because of a host of mathy reasons, but also because of the DAG. The effect of increased police presence is confounded by both month and block, but all we've really adjusted for binary before/after (for month) and binary synagogue/no synagogue (for block). By reducing these confounders to just binary variables, we lose a lot of the variation across months and blocks.
 
-To fix this, run a diff-in-diff model that includes two additional control variables: `block + month`. 
+To fix this, run a diff-in-diff model that includes two additional control variables: `block + month`.
 
 > ***Warning***: this will be *incredibly* slow! There are `r nrow(distinct(terror, block))` blocks and `nrow(distinct(terror, month))` months, and R is finding estimates for each block and month, and the math to do that is complex. Every time you knit this document, R will rerun the model, which takes 5-10 seconds, and the delay when knitting can be annoying. If you want to speed this up across knitting sessions, add the option `cache=TRUE` to the chunk options for this chunk. R will store the results in a temporary file and won't re-run the model if the data hasn't changed.
 
 **Don't use `tidy` to view the results**. You'll get a table with almost 900 rows and it'll take up pages and pages of your knitted document. If you really want to see the results, filter out the block and month rows (like this:).
 
-```r
+``` r
 tidy(name_of_model) %>% 
   filter(!str_starts(term, "month"), 
          !str_starts(term, "block"))
 ```
 
 ```{r really-slow-fe-model, cache=TRUE}
-# Code here with block + month in the model
-# DON'T RUN tidy() or modelsummary() without filtering out month and block coefficients
+did_fe <- lm(car_theft ~ (after*same_block_factor) + month + block, data = terror)
+
+tidy(did_fe) %>% 
+  filter(!str_starts(term, "month"), 
+         !str_starts(term, "block"))
 ```
 
 That slowness is miserable. You can get around that by using a different function for OLS that has built-in support for fixed effects (or indicator variables). The `feols()` (fixed-effects OLS) function from the **fixest** package lets you include indicator variables in regression in a more sophisticated way. The math is lighting fast, and the coefficients for each block and year are hidden by default (though you can still see them if you really want).
 
-The syntax for `feols()` is the same as `lm()`, but with a slight change to accommodate the fixed effects. Use the `|` character to specify a section of the formula that contains the fixed effects: 
+The syntax for `feols()` is the same as `lm()`, but with a slight change to accommodate the fixed effects. Use the `|` character to specify a section of the formula that contains the fixed effects:
 
-```r
+``` r
 model_name <- feols(car_theft ~ same_block*after | block + month, 
                     data = terror)
 ```
 
 One more cool thing that `feols()` can do that normal `lm()` can't is provide robust standard errors. There is systematic variation within blocks and across time, and we can mathematically account for that variation in the standard errors of the regression. (If you've ever used Stata you do this with `reg y x, robust`). If you ever want to use robust and/or clustered standard errors with regular OLS regression in R, check out the [`lm_robust()` function in the **estimatr** package](https://declaredesign.org/r/estimatr/articles/getting-started.html#lm_robust). With `feols()`, you can add an argument to `tidy()` to get the robust standard errors.
 
-```r
+``` r
 # Stata's default robust SE algorithm is called "Huber-White standard errors", 
 # and we can get those same numbers here. Look at the documentation for 
 # summary.fixest() for more robustness and clustering options
@@ -175,7 +179,10 @@ tidy(model_name, se = "white")
 Phew. Now that you know about `feols()` and robust standard errors, build a model that finds the diff-in-diff effect that includes fixed effects for block and month. Show the results with `tidy()` using Huber-White standard errors.
 
 ```{r model-a, message=FALSE}
-# Code for model A + use tidy() to show Huber-White robust standard errors
+did_fe_robust <- feols(car_theft ~ same_block*after | block + month, 
+                    data = terror)
+
+tidy(did_fe_robust, se = "white")
 ```
 
 In the original study, the authors also considered the effect of two other treatment variables. Maybe the extra police presence in blocks with synagogues reduced car thefts not just for those blocks, but areas 1 block away or 2 blocks away.
@@ -183,26 +190,32 @@ In the original study, the authors also considered the effect of two other treat
 Run two more models. In the first, keep the `same_block*after` interaction term and add another diff-in-diff interaction for `one_block_away*after`. In the second, keep the same block and one block interaction terms and add one more diff-in-diff interaction for `two_blocks_away*after`
 
 ```{r models-b-c, message=FALSE}
-# Code for models B and C + use tidy() to show Huber-White robust standard errors
+did_fe_robust.2 <- feols(car_theft ~ same_block*after + one_block_away*after | block + month, 
+                    data = terror)
+did_fe_robust.3 <- feols(car_theft ~ same_block*after + one_block_away*after + 
+                           two_blocks_away*after| block + month, 
+                    data = terror)
 ```
 
-Recreate columns A, B, and C from Table 3 from the original article with `modelsummary()`. You'll need to show the results from your three `feols()` models (with one interaction term, with two interactions, and with three interactions). You can tell the table to show robust standard errors like the authors did in their original study by including the `se = "white"` argument, and you can control how many digits are used with the `fmt` (format) argument (the original article used 5 decimal points, so you can too). You can add significance stars by including `stars = TRUE`. 
+Recreate columns A, B, and C from Table 3 from the original article with `modelsummary()`. You'll need to show the results from your three `feols()` models (with one interaction term, with two interactions, and with three interactions). You can tell the table to show robust standard errors like the authors did in their original study by including the `se = "white"` argument, and you can control how many digits are used with the `fmt` (format) argument (the original article used 5 decimal points, so you can too). You can add significance stars by including `stars = TRUE`.
 
-```r
+``` r
 modelsummary(list(models, go, here),
              se = "white", fmt = "%.5f", stars = TRUE)
 ```
 
 ```{r show-all-models}
-
+modelsummary(list(did_fe_robust, did_fe_robust.2, did_fe_robust.3),
+             se = "white", fmt = "%.5f", stars = TRUE)
 ```
 
 Answer these questions: (again, you don't have to keep this in list form when you answer):
 
-- **Does having extra police reduce thefts on the same block? Is the effect significant?**
-- **Does having extra police reduce thefts one block away? Is the effect significant?**
-- **Does having extra police reduce thefts two blocks away Is the effect significant?**
+-   **Does having extra police reduce thefts on the same block? Is the effect significant?**
+-   **Does having extra police reduce thefts one block away? Is the effect significant?**
+-   **Does having extra police reduce thefts two blocks away Is the effect significant?**
 
+Extra police presence on a block significantly reduces car theft by 0.077 for that same block. Trend data suggests that police presence on a block reduces car theft in blocks one or more blocks out, however there is no significant effect.
 
 # 6. Translate results to something more interpretable
 
@@ -222,16 +235,18 @@ Imagine if after some program, the treatment group had an outcome of 3 while the
 (3 - 6) / 6
 ```
 
-This means that this fake program *caused* a 50% reduction in the outcome. 
+This means that this fake program *caused* a 50% reduction in the outcome.
 
----
+------------------------------------------------------------------------
 
 Find the percent change in car thefts because of the increase police presence after the July terror attack *using the results from Model C*. To do this, you need two numbers: (1) the average number of thefts in control blocks after the attack, and (2) the average number of thefts in treatment blocks after the attack. Because you're using Model C, your control group includes blocks that don't have synagogues within two blocks.
 
 Use `group_by()` and `summarize()` to calculate the average number of thefts after the attack in control blocks (Hint: this will be just like the diff-in-diff by hand table you made in section 3, but instead of grouping by `same_block`, group by `more_than_two_away`).
 
 ```{r terror-treatment-control}
-
+did_hand.2 <- terror %>% 
+  group_by(more_than_two_away, after) %>%
+  summarise(avg_car_theft = mean(car_theft)) %>% spread(key = after, value = avg_car_theft)
 ```
 
 Subtract the diff-in-diff effect for "same_block × after" from Model C from the average in the control group to find the average number of car thefts in treatment blocks. (Note: It'll be really tempting to just look at the table for the average for treatment + after, but this won't be right! You need to use control + diff-in-diff, since that's the counterfactual.)
@@ -239,5 +254,9 @@ Subtract the diff-in-diff effect for "same_block × after" from Model C from the
 Finally, calculate the percent change in car thefts after the terror attack across treatment and control blocks (hint: the answer is in the third full paragraph on p. 123 of the original article).
 
 ```{r terror-pct-change}
+did_hand.2 <- did_hand.2 %>%
+  mutate(per_change_log = log(`TRUE`/`FALSE`)) %>%
+  mutate(per_change = (`TRUE`-`FALSE`)/`FALSE`)
 
+diff(did_hand.2$per_change) 
 ```
