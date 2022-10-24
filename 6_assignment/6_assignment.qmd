@@ -1,0 +1,248 @@
+---
+title: "Problem Set 6"
+author: "W. Hunter Giles"
+prefer-html: true
+format: 
+    pdf:
+      code-line-numbers: true
+      code-block-bg: true
+    gfm: 
+      toc: true
+editor: visual
+---
+
+------------------------------------------------------------------------
+
+There is substantial research and evidence that [class attendance has a positive and significant effect on student performance](http://graphics8.nytimes.com/packages/pdf/nyregion/20110617attendancereport.pdf). Because of this, state and local government agencies and school districts have designed programs and policies that incentivize students to not miss school days. Examples include tangible prizes like [colorful pendants and free tickets to events](https://www.nytimes.com/2011/06/17/nyregion/city-reduces-chronic-absenteeism-in-public-schools.html), [automated calls from celebrities](https://cityroom.blogs.nytimes.com/2011/02/10/schools-use-celebrity-robo-calls-to-battle-truancy/), or [class policies that mandate attendance](https://people.ucsc.edu/~cdobkin/Papers/2010%20Skipping%20class%20in%20college%20and%20exam%20performance%20Evidence%20from%20a%20regression%20discontinuity%20classroom%20experiment.pdf).
+
+Existing research has used a range of methods to test the relationship between attendance programs and student performance, including [simple regression analysis](https://dx.doi.org/10.1016/j.sbspro.2016.07.051), [randomized experiments](https://dx.doi.org/10.3200/JECE.39.3.213-227), and [regression discontinuity approaches](https://people.ucsc.edu/~cdobkin/Papers/2010%20Skipping%20class%20in%20college%20and%20exam%20performance%20Evidence%20from%20a%20regression%20discontinuity%20classroom%20experiment.pdf).
+
+In this assignment, you will use regression discontinuity approaches to measure the effect of a hypothetical program on hypothetical student grades (this data is 100% fake).
+
+In this simulated program, high school students who have less than 80% attendance during their junior year (11th grade) are assigned to a mandatory school attendance program during their senior year (12th grade). This program requires them to attend school and also provides them with additional support and tutoring to help them attend and remain in school. At the end of their senior year, students take a final test to assess their overall learning in high school.
+
+The dataset I've provided contains four columns:
+
+-   `id`: A randomly assigned student ID number
+-   `attendance`: The proportion of days of school attended during a student's junior year (ranges from 0 to 100)
+-   `treatment`: Binary variable indicating if a student was assigned to the attendance program during their senior year
+-   `grade`: A student's final test grade at the end of their senior year
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(rdrobust)
+library(rddensity)
+library(broom)
+library(modelsummary)
+
+# This turns off this message that appears whenever you use summarize():
+# `summarise()` ungrouping output (override with `.groups` argument)
+options(dplyr.summarise.inform = FALSE)
+
+program <- read_csv("../data/attendance_program.csv")
+```
+
+# Step 1: Determine if process of assigning treatment is rule-based
+
+Regression discontinuity can be used to measure the program effect because the program is rule based, with a hard cut off score. Students whose attendance is less than 80% receive the treatment and students above do not. There is no logical difference in students that have an attendance score right above or below the cut off point (i.e. Range \[75,85\]).
+
+# Step 2: Determine if the design is fuzzy or sharp
+
+It appears that all observations with an attendance score below 80 are in the treatment group and that there is a sharp cut off. However, there may be some mixing right at the 80 vertical line.
+
+```{r}
+# Dot plot with attendance on the x-axis and treatment on the y-axis
+ggplot(program, mapping =aes(attendance, treatment, color = treatment)) +
+  geom_jitter(show.legend = F) +
+  labs(title = "Program Enrollment", x="Attendance Score", y="Treatment Status") +
+  theme_dark() +
+  theme(plot.background = element_rect(fill = "gray"))
+```
+
+Below we see that there is no group leakage.
+
+```{r}
+program %>%
+  group_by(treatment, attendance <= 80) %>%
+  summarise(count = n())
+```
+
+# Step 3: Check for discontinuity in running variable around cut-point
+
+The histogram below provides evidence that teachers may be pushing students with actual attendance scores between 78 and 80 above 80. There is a dip in treatment density just before the 80 cut-off point that shows this.
+
+```{r}
+# Histogram of attendance
+ggplot(program, mapping = aes(attendance, fill=treatment)) +
+  geom_histogram(boundary = 80, binwidth = 2, color="gray") +
+  geom_vline(xintercept = 80) +
+  labs(title = "Attendance Distribution") +
+  theme_dark() +
+  theme(plot.background = element_rect(fill = "gray"))
+```
+
+From the output below, in the "robust" line, we see that the p-value is not significant, so we can assume that there is not manipulation
+
+```{r, warning=F}
+# McCrary test
+test_density <- rddensity(program$attendance, c = 80)
+summary(test_density)
+```
+
+```{r}
+rdplotdensity(rdd=test_density, 
+              X = program$attendance,
+              type = "both")
+```
+
+# Step 4: Check for discontinuity in outcome across running variable
+
+From the graph, we can see that there is discontinuity around the cut off point. It appears students who receive the treatment make higher scores.
+
+```{r, warning=F}
+# Graph showing discontinuity in grades across levels of attendance
+ggplot(program, mapping = aes(attendance, grade, color=treatment)) +
+  geom_point(size = .5, alpha = .5) +
+  geom_vline(xintercept = 80) +
+  geom_smooth(method = "lm") +
+  labs(title = "Association with Attendance & Grade", 
+       y = "Grade", 
+       x = "Attendance Score") +
+    theme_dark() +
+  theme(plot.background = element_rect(fill = "gray"))
+```
+
+# Step 5: Measure the size of the effect
+
+## Parametric estimation
+
+Create a new dataset based on `program` that has a new variable in it named `attendance_centered`. This will be the value of `attendance` minus 80. This centers student attendance around the cutpoint (if a student had 85% attendance, they'd have a value of 5; if they had 70% attendance, they'd have a value of 10; etc.) and makes it easier to interpret the intercept coefficient in linear models since it shifts the y-intercept up to the cutpoint instead of zero.
+
+```{r}
+# Add column to program that centers attendance
+program.parametric <- program %>%
+  mutate(attendance_centered = attendance - 80)
+```
+
+Regression model:
+
+$$
+\text{Grade} = \beta_0 + \beta_1 \text{Attendance (centered)} + \beta_2 \text{Program} + \epsilon
+$$
+
+For each additional point in the Attendance Score above 80, a students grade will be 1.56 points higher (p\<.01). If a student is in the program, then on average, there grade is 5.88 points higher (p\<.01).
+
+```{r}
+# Linear model
+program.parametric.model <- lm(grade ~ attendance_centered + treatment, 
+                               data = program.parametric)
+tidy(program.parametric.model)
+```
+
+```{r}
+# Data and model with bandwidth = 5
+program.parametric.bw5 <- program.parametric %>%
+  filter(abs(attendance_centered) < 5)
+
+program.parametric.model.bw5 <- lm(grade ~ attendance_centered + treatment, 
+                               data = program.parametric.bw5)
+```
+
+```{r}
+# Data and model with bandwidth = 10
+program.parametric.bw10 <- program.parametric %>%
+  filter(abs(attendance_centered) < 10)
+
+program.parametric.model.bw10 <- lm(grade ~ attendance_centered + treatment, 
+                               data = program.parametric.bw10)
+```
+
+The coefficient of the treatment variable increases as the bandwidth decreases. A bandwidth of 10 produces a coefficient of 11.87, and a bandwidth of 5 produces a treatment coefficient of 12.43. This means that the program increases grades by 11.87 and 12.43 points, respectively. The number of observations seems to fall by a factor of 2 between each model. 1200 observations in model one, 640 in model two, and 330 in model three.
+
+The advantage of the smaller bandwidth is we can assume the treatment and control group are identical with more certainty, so the most likely coeifficent is model 3.
+
+```{r}
+# All three models
+modelsummary(list(
+  "No Bandwidth" = program.parametric.model,
+  "Bandwidth 10" = program.parametric.model.bw10,
+    "Bandwidth 5" = program.parametric.model.bw5
+))
+```
+
+## Nonparametric estimation
+
+The non-parametric approach yields similar results to the parametric approach. Form the table below, we see that the effect size is 12.013, meaning the local treatment effect yields 12.013 grade points higher.
+
+```{r, warning=F}
+# rdrobust()
+rdrobust(y = program$grade, x = program$attendance, c = 80) %>% 
+  summary()
+```
+
+```{r, warning=F}
+# Plot
+# rdplot(y = program$grade, x = program$attendance, c = 80)
+ggplot(program, aes(x = attendance, y = grade, color = treatment)) +
+  geom_point(size = 0.5, alpha = 0.5) + 
+  geom_smooth(data = filter(program, attendance < 80), method = "lm") +
+  geom_smooth(data = filter(program, attendance < 80), method = "loess", 
+              size = 0.5, color = "grey50", se = FALSE) +
+  geom_smooth(data = filter(program, attendance >= 80), method = "lm") +
+  geom_vline(xintercept = 80) +
+  labs(x = "Attendance in junior year", y = "Grade at end of high school")
+```
+
+## Nonparametric sensitivity checks
+
+Now that we have an effect, we can adjust some of the default options to see how robust the effect size is.
+
+First we'll play with the bandwidth. Find the ideal bandwidth with with `rdbwselect()`, then run `rdrobust` with twice that bandwidth and half that bandwidth (hint: use `h = SOMETHING`).
+
+```{r, warning=F}
+# Find the ideal bandwidth. Make sure rdbwselect() pipes into summary() so you
+# can see the results: rdbwselect() %>% summary()
+#
+# You'll use the same y, x, and c as before
+rdbwselect(y = program$grade, x = program$attendance, c = 80) %>%
+  summary()
+```
+
+```{r}
+# rdrobust() with half bandwidth
+rdrobust(y = program$grade, x = program$attendance, c = 80, h = 8.112/2) %>% 
+  summary()
+
+# rdrobust() with two times the bandwidth
+rdrobust(y = program$grade, x = program$attendance, c = 80, h = 8.112*2) %>% 
+  summary()
+```
+
+Next we'll play with the kernel. Use the default ideal bandwidth and adjust the kernel to change how heavily weighted the observations right by the cutoff are. You already used a triangular kernel---that was the first `rdrobust()` model you ran, since triangular is the default. Try using Epanechnikov and uniform kernels (look at the help file for `rdrobust` or look at the in-class example to see how to specify different kernels):
+
+```{r, warning=F}
+# rdrobust() with an Epanechnikov kernel
+rdrobust(y = program$grade, x = program$attendance, c = 80, kernel = "epanechnikov") %>% 
+  summary()
+
+# rdrobust() with a uniform kernel
+rdrobust(y = program$grade, x = program$attendance, c = 80, kernel = "uniform") %>% 
+  summary()
+```
+
+# Step 6: Compare all the effects
+
+I believe the most accurate model is the Parametric model with a bandwidth of 5. The data appears to be relatively linear, so the nonparametric line is unnecessary. Also the low bandwidth gives us confidences that the values are all similar.
+
+|    Method     | Bandwidth |    Kernel    | Estimate |
+|:-------------:|:---------:|:------------:|:--------:|
+|  Parametric   | Full data |  Unweighted  |  5.884   |
+|  Parametric   |    10     |  Unweighted  |  11.869  |
+|  Parametric   |     5     |  Unweighted  |  12.340  |
+| Nonparametric |   8.112   |  Triangular  |  12.013  |
+| Nonparametric |   4.056   |  Trianglar   |  12.761  |
+| Nonparametric |  16.224   |  Triangular  |  11.327  |
+| Nonparametric |   7.780   | Epanechnikov |  11.910  |
+| Nonparametric |   6.441   |   Uniform    |  11.531  |
+
+The program appears to have significant effect. Assuming the benefits out-way the cost, the new program could help students attain better grades. Further research should be done, if the program can benefit all students, and not just students around the cut-off point.
