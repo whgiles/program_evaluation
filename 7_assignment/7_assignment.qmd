@@ -43,18 +43,77 @@ However, there is an issue with omitted variable bias and endogeneity. Instrumen
 Load and look at the dataset
 
 ```{r load-wage-data, message=FALSE}
-wages <- read_csv("data/wages.csv")
+wages <- read_csv("../data/wages.csv")
 ```
 
 ## Step 2
 
 We need an instrument for education, since part of it is endogenous. Do you think the variable `n_kids` (the number of children) would be a valid instrument? Does it meet the three requirements of a valid instrument?
 
-ANSWER HERE
+`Education` in endogenous because of association with ability. Unfortunately, ability is measurable, and when using the Naive model, left in the error term. To account for this, we can use the instrumental variable `n_kids`.
 
-Explain why it passes or fails each of the three requirements for a valid instrument. Test the requirements where possible using scatterplots and regression.
+Below are tests for the efficacy of the Instrument Variable.
 
-ANSWER HERE and include plots and regression
+### Relevance
+
+`n_kids` is correlated with `education` (r = -0.22) and has a regression coefficient of -0.47.
+
+```{r, warning=F}
+ggplot(wages, aes(n_kids, education)) +
+  geom_jitter() +
+  geom_smooth(method = "lm") +
+  labs(title = "Wage on Number of Kids", x = "Number of Kids", y = "Education")
+```
+
+```{r}
+check_relevance <- lm(education ~ n_kids, data = wages)
+tidy(check_relevance)
+```
+
+```{r}
+cor(wages$education, wages$n_kids)
+```
+
+### Exclusion
+
+`n_kids` must only effect `wage` through `education`. We can test this in the following way:
+
+$$  
+Wage = \beta_0 + \beta_1education \\
+Education = \gamma_0 + \gamma_1 nkids \\
+Wage = \alpha_0 + \alpha_1nkids \\
+\\
+H_a: \space \text{Exclusion if } \alpha_1 = \beta_1 \gamma_1
+$$
+
+#### Mathematical testing:
+
+The Instrument Variable does not pass the Exclusion
+
+```{r}
+equation.1 <- lm(wage ~ education, data = wages)
+equation.2 <- lm(education ~ n_kids, data = wages)
+equation.3 <- lm(wage ~ n_kids, data = wages)
+
+beta_1 <- coef(equation.1)["education"]
+gamma_1 <- coef(equation.2)["n_kids"]
+alpha_1 <- coef(equation.3)["n_kids"]
+
+as.numeric(beta_1 * gamma_1 - alpha_1)
+```
+
+#### Graphical Testing
+
+```{r}
+ggplot(wages, aes(n_kids, wage)) +
+  geom_jitter() +
+  geom_smooth(method = "lm") +
+  labs(title = "Wage on Number of Kids", x = "Number of Kids", y = "Wage")
+```
+
+### Exogeneity
+
+From economic intuition, we can argue that `n_kids` is not correlated with `ability`. Ability or IQ is likely randomly distributed at birth and not a result of the number of offspring.
 
 ## Step 3
 
@@ -62,25 +121,48 @@ Assume that the number of children is a valid instrument (regardless of whatever
 
 Do this by hand: create a first stage model, extract the predicted education, and use predicted education in the second stage.
 
-Interpret the coefficient that gives the effect of education on wages ($\beta_1$) and its significance.
+```{r}
+first_stage <- lm(education ~ n_kids, data = wages)
+wages_fitted <- augment_columns(first_stage, wages) %>%
+  rename(education.fitted = .fitted)
 
-DO ALL THAT HERE
+second_stage <- lm(wage ~ education.fitted, data = wages_fitted)
+tidy(second_stage)
+```
 
-(Remember that you can also use the `iv_robust()` function from the **estimatr** package to run IV/2SLS models in one step with: `iv_robust(y ~ x | z, data = data)`, where `y` is the outcome, `x` is the policy/program, and `z` is the instrument. Try doing this to check your manual two-stage model.)
+From the 2SLS model above, as education level increases by 1, average hourly earnings will increase by 33 cents. However the relationship in insignificant, so we are speaking in trends.
+
+Another way to do it:
+
+```{r}
+model_2sls <- iv_robust(wage ~ education | n_kids, data = wages)
+tidy(model_2sls)
+```
 
 ## Step 4
 
 Run a naive model predicting the effect of education on wages (i.e. without any instruments). How does this naive model compare with the IV model?
 
-Show the results side-by-side here:
+```{r}
+naive_model <- lm(wage ~ education, data = wages)
+```
 
-TABLE HERE
+Comparable Table
+
+| Model | Education Coeifficent | p.value |
+|-------|-----------------------|---------|
+| 2SLS  | 0.33                  | 0.21    |
+| Naive | 0.54                  | 0.00    |
+
+: From the model it looks like omitting the ability variable bias up the coefficient, so that the Naive coefficient appears larger and more significant than the 2SLS.
 
 ## Step 6
 
-Explain which estimates (OLS vs. IV/2SLS) you would trust more (or why you distrust both)
+I would trust the Naive model more because the 2SLS model goes not pass the Exclusion Restriction. This means `n_kids` is mediating or confounding through another variable besides `education` to effect wage.
 
-ANSWER HERE
+```{r, include=FALSE}
+rm(list = ls())
+```
 
 ------------------------------------------------------------------------
 
@@ -89,7 +171,7 @@ ANSWER HERE
 [Economic research shows](https://dx.doi.org/10.1002/pam.20288) that there is a potential (albeit weak) connection between health outcomes and residency in public housing. You are interested in finding the effect of public housing assistance on health outcomes. In the absence of experimental data, you must use observational data collected by the Georgia Department of Public Health. You have access to a dataset of 1,000 rows with the following columns:
 
 | Variable name         | Description                                                                      |
-|-----------------------|----------------------------------------------------------------------------------|
+|-------------------------|-----------------------------------------------|
 | `HealthStatus`        | Health status on a scale from 1 = poor to 20 = excellent                         |
 | `HealthBehavior`      | Omitted variable (you can't actually measure this!)                              |
 | `PublicHousing`       | Number of years spent in public housing                                          |
@@ -122,7 +204,234 @@ You have three tasks:
 3.  Estimate the effect of public housing on health status using 2SLS IV. You can use `iv_robust()` to do it all in one step if you want (but you'll still need to run a first-stage model to find the F statistic). Compare the results with the naive model. Which model do you trust (if any), and why?
 
 ```{r load-housing-data, message=FALSE}
-housing <- read_csv("data/public_housing.csv")
+housing <- read_csv("../data/public_housing.csv")
 ```
 
-DO ALL THAT HERE.
+$$
+HealthStatus = \beta_0 + \beta_1PublicHousing
+$$
+
+### Relevance
+
+##### Supply
+
+```{r}
+ggplot(housing, mapping = aes(Supply, PublicHousing)) +
+  geom_jitter(alpha = .5) +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+check_relevance_supply <- lm(PublicHousing ~ Supply, data = housing)
+tidy(check_relevance_supply)
+
+```
+
+```{r}
+glance(check_relevance_supply)
+```
+
+`Supply` and `PublicHousing` have a significant and positive relationship, and a F-statistic greater than 10, so we can assume that `Supply` is Relevant.
+
+##### Parents Health Status
+
+```{r}
+ggplot(housing, mapping = aes(ParentsHealthStatus, PublicHousing)) +
+  geom_jitter(alpha = .5) +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+check_relevance_ParentsHealthStatus <- lm(PublicHousing ~ ParentsHealthStatus, data = housing)
+tidy(check_relevance_ParentsHealthStatus)
+
+```
+
+```{r}
+glance(check_relevance_ParentsHealthStatus)
+```
+
+`ParentsHealthStatus` and `PublicHousing` are significant and positively correlated, but have a F-statistic less than 10, so we cannot assume relevancy.
+
+##### Waiting Time
+
+```{r}
+ggplot(housing, mapping = aes(WaitingTime, PublicHousing)) +
+  geom_jitter(alpha = .5) +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+check_relevance_WaitingTime <- lm(PublicHousing ~ WaitingTime, data = housing)
+tidy(check_relevance_WaitingTime)
+```
+
+```{r}
+glance(check_relevance_WaitingTime)
+```
+
+`WaitingTime` and `PublicHousing` are significantly and positively correlated, and the F-statistic in above 10, so we can assume relevancy.
+
+##### Stamp
+
+```{r}
+ggplot(housing, mapping = aes(Stamp, PublicHousing)) +
+  geom_jitter(alpha = .5) +
+  geom_smooth(method = "lm") 
+```
+
+```{r}
+check_relevance_Stamp <- lm(PublicHousing ~ Stamp, data = housing)
+tidy(check_relevance_Stamp)
+```
+
+```{r}
+glance(check_relevance_Stamp)
+```
+
+`Stamp` and `PublicHousing` are insignificantly correlated, and the F-statistic is less than 10, so we cannot assume relevancy.
+
+### Exclusion
+
+Creating a function to evaluate exclusion:
+
+```{r}
+exclusion <- function(Y, X, Z) {
+  equation.1 <- lm(Y ~ X)
+  equation.2 <- lm(X ~ Z)
+  equation.3 <- lm(Y ~ Z)
+
+  beta_1 <- coef(equation.1)[2]
+  gamma_1 <- coef(equation.2)[2]
+  alpha_1 <- coef(equation.3)[2]
+  
+  mylist <- list()
+  mylist["beta x gamma"] <- gamma_1 * beta_1
+  mylist["alpha"] <- alpha_1
+  mylist["diff"] <- (beta_1*gamma_1) - alpha_1
+  
+  return(mylist)
+}
+```
+
+##### Supply
+
+```{r}
+exclusion(housing$HealthStatus, housing$PublicHousing, housing$Supply)
+```
+
+The difference is close to zero, so we can assume that is passes the exclusion restriction.
+
+##### Parents Health Status
+
+```{r}
+exclusion(housing$HealthStatus, housing$PublicHousing, housing$ParentsHealthStatus)
+```
+
+The difference is close to 0, so it passes the exclusion restrictions.
+
+##### Waiting Time
+
+```{r}
+exclusion(housing$HealthStatus, housing$PublicHousing, housing$WaitingTime)
+```
+
+The difference is small enough where an exclusion argument can be made, but it is possible that `WaitingTime` effects `HealthStatus` through a mediator or confounding variable.
+
+##### Stamp
+
+```{r}
+exclusion(housing$HealthStatus, housing$PublicHousing, housing$Stamp)
+```
+
+The difference is very small so we can assume exclusion.
+
+### Exogeneity
+
+##### Supply
+
+```{r}
+ggplot(housing, aes(x = HealthBehavior, y = Supply)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+cor(housing$HealthBehavior, housing$Supply)
+```
+
+The correlation is close to zero, so we can assume it passes exogeneity criterion.
+
+##### Parents Health Status
+
+```{r}
+ggplot(housing, aes(x = HealthBehavior, y = ParentsHealthStatus)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+cor(housing$HealthBehavior, housing$ParentsHealthStatus)
+```
+
+The correlation is close to zero, so we can assume it passes exogeneity criterion.
+
+##### Waiting Time
+
+```{r}
+ggplot(housing, aes(x = HealthBehavior, y = WaitingTime)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+cor(housing$HealthBehavior, housing$ParentsHealthStatus)
+```
+
+The correlation is close to zero, so we can assume it passes exogeneity criterion.
+
+##### Stamp
+
+```{r}
+ggplot(housing, aes(x = HealthBehavior, y = Stamp)) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+cor(housing$HealthBehavior, housing$ParentsHealthStatus)
+```
+
+The correlation is close to zero, so we can assume it passes exogeneity criterion.
+
+### Naive Model
+
+```{r}
+naive_model <- lm(HealthStatus ~ PublicHousing , data = housing)
+tidy(naive_model)
+```
+
+The Naive Model above shows the number of years spent in public housing (`PublicHousing`) increases by 1, health status increase by .32 (p\<.01).
+
+### 2SLS
+
+```{r}
+first_stage <- lm(PublicHousing ~ WaitingTime, data = housing)
+housing_fitted <- augment_columns(first_stage, housing) %>%
+  rename(PublicHousing.fitted = .fitted)
+
+second_stage <- lm(HealthStatus ~ PublicHousing.fitted, data = housing_fitted)
+tidy(second_stage)
+```
+
+### Model Summary
+
+```{r}
+modelsummary::modelsummary(list(
+  "Naive" = naive_model,
+  "First Stage" = first_stage,
+  "Second Stage" = second_stage
+))
+```
+
+Both results show that the duration spent in public housing significantly increases health status, therefore we can reject the null hypothesis that public housing does not increase health status. I would argue that the 2SLS has more authenticity than the naive model. An individuals Health Behavior is correlated with their living environment and their health status. Since Health Behavior is unobserved, this leaves endogeneity on the model. The variable `WaitingTime` is a good instrument because is passed the three assumptions mentions above. Intuitively, we can expect that `WaitingTime` is randomly assigned to people, so it cannot be correlated with behavior. Therefore, I would suggest that the 2SLS is more unbiased than the naive model.
