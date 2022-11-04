@@ -69,15 +69,15 @@ wages <- read_csv("../data/wages.csv")
 
 ## Step 2
 
-We need an instrument for education, since part of it is endogenous. Do
+*We need an instrument for education, since part of it is endogenous. Do
 you think the variable `n_kids` (the number of children) would be a
 valid instrument? Does it meet the three requirements of a valid
-instrument?
+instrument?*
 
-`Education` in endogenous because of association with ability.
-Unfortunately, ability is measurable, and when using the Naive model,
-left in the error term. To account for this, we can use the instrumental
-variable `n_kids`.
+`Education` is endogenous because of association with ability.
+Unfortunately, ability is not measurable, and when using the Naive
+model, left in the error term. To account for this, we can use the
+instrumental variable `n_kids`.
 
 Below are tests for the efficacy of the Instrument Variable.
 
@@ -93,8 +93,6 @@ ggplot(wages, aes(n_kids, education)) +
   labs(title = "Wage on Number of Kids", x = "Number of Kids", y = "Education")
 ```
 
-    `geom_smooth()` using formula 'y ~ x'
-
 ![](7_assignment_files/figure-gfm/unnamed-chunk-2-1.png)
 
 ``` r
@@ -109,10 +107,18 @@ tidy(check_relevance)
     2 n_kids        -0.472    0.0936     -5.05 6.21e-  7
 
 ``` r
-cor(wages$education, wages$n_kids)
+glance(check_relevance)
 ```
 
-    [1] -0.2152914
+    # A tibble: 1 × 12
+      r.squared adj.r.squared sigma statistic     p.value    df logLik   AIC   BIC
+          <dbl>         <dbl> <dbl>     <dbl>       <dbl> <dbl>  <dbl> <dbl> <dbl>
+    1    0.0464        0.0445  2.71      25.5 0.000000621     1 -1269. 2544. 2557.
+    # … with 3 more variables: deviance <dbl>, df.residual <int>, nobs <int>
+
+The tables above show that there is a significant negative assosication
+between the number of kids and education (F\>10). We can assume
+relevance.
 
 ### Exclusion
 
@@ -129,7 +135,8 @@ $$
 
 #### Mathematical testing:
 
-The Instrument Variable does not pass the Exclusion
+The Instrument Variable does not pass the Exclusion, although the
+difference is small.
 
 ``` r
 equation.1 <- lm(wage ~ education, data = wages)
@@ -140,10 +147,17 @@ beta_1 <- coef(equation.1)["education"]
 gamma_1 <- coef(equation.2)["n_kids"]
 alpha_1 <- coef(equation.3)["n_kids"]
 
-as.numeric(beta_1 * gamma_1 - alpha_1)
+tibble("beta" = beta_1, 
+       "gamma" = gamma_1, 
+       "alpha"=alpha_1, 
+       "beta * gamma"=beta_1 * gamma_1, 
+       "diff"=as.numeric(beta_1 * gamma_1 - alpha_1))
 ```
 
-    [1] -0.09821587
+    # A tibble: 1 × 5
+       beta  gamma  alpha `beta * gamma`    diff
+      <dbl>  <dbl>  <dbl>          <dbl>   <dbl>
+    1 0.541 -0.472 -0.157         -0.256 -0.0982
 
 #### Graphical Testing
 
@@ -153,8 +167,6 @@ ggplot(wages, aes(n_kids, wage)) +
   geom_smooth(method = "lm") +
   labs(title = "Wage on Number of Kids", x = "Number of Kids", y = "Wage")
 ```
-
-    `geom_smooth()` using formula 'y ~ x'
 
 ![](7_assignment_files/figure-gfm/unnamed-chunk-10-1.png)
 
@@ -191,8 +203,8 @@ tidy(second_stage)
     2 education.fitted    0.333     0.270     1.23    0.218
 
 From the 2SLS model above, as education level increases by 1, average
-hourly earnings will increase by 33 cents. However the relationship in
-insignificant, so we are speaking in trends.
+hourly earnings will increase by 33 cents. However the relationship is
+insignificant (p\>.05), so we are speaking in trends.
 
 Another way to do it:
 
@@ -225,7 +237,7 @@ Comparable Table
 | 2SLS  | 0.33                  | 0.21    |
 | Naive | 0.54                  | 0.00    |
 
-From the model it looks like omitting the ability variable bias up the
+From the model it looks like omitting the ability variable biases up the
 coefficient, so that the Naive coefficient appears larger and more
 significant than the 2SLS.
 
@@ -284,27 +296,6 @@ This data includes four potential instruments:
   the city (in months)
 - `Stamp`: Dollar amount of food stamps (SNAP) spent each month
 
-You have three tasks:
-
-1.  Evaluate the suitability of each of the four potential instruments.
-    Check if they (1) have *relevance* with a scatterplot and model and
-    F-test, (2) meet the *excludability* assumption, and (3) meet the
-    *exogeneity* assumption. Choose one of these as your main instrument
-    and justify why it’s the best. Explain why the other three are not.
-
-2.  Estimate a naive model of the effect of public housing on health
-    status (i.e. without any instruments). You can include any control
-    variables you feel appropriate (i.e. that fit in your causal model).
-    If you use variables that are categorical like race, education, or
-    marital status, make sure you wrap them with `as.factor()` to treat
-    them as categories instead of numbers (e.g. `as.factor(education)`).
-
-3.  Estimate the effect of public housing on health status using
-    2SLS IV. You can use `iv_robust()` to do it all in one step if you
-    want (but you’ll still need to run a first-stage model to find the F
-    statistic). Compare the results with the naive model. Which model do
-    you trust (if any), and why?
-
 ``` r
 housing <- read_csv("../data/public_housing.csv")
 ```
@@ -322,8 +313,6 @@ ggplot(housing, mapping = aes(Supply, PublicHousing)) +
   geom_jitter(alpha = .5) +
   geom_smooth(method = "lm")
 ```
-
-    `geom_smooth()` using formula 'y ~ x'
 
 ![](7_assignment_files/figure-gfm/unnamed-chunk-20-1.png)
 
@@ -800,7 +789,7 @@ hypothesis that public housing does not increase health status. I would
 argue that the 2SLS has more authenticity than the naive model. An
 individuals Health Behavior is correlated with their living environment
 and their health status. Since Health Behavior is unobserved, this
-leaves endogeneity on the model. The variable `WaitingTime` is a good
+leaves endogeneity in the model. The variable `WaitingTime` is a good
 instrument because is passed the three assumptions mentions above.
 Intuitively, we can expect that `WaitingTime` is randomly assigned to
 people, so it cannot be correlated with behavior. Therefore, I would
