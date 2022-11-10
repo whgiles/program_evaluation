@@ -13,6 +13,8 @@ editor: visual
 
 ------------------------------------------------------------------------
 
+### Set-up
+
 ```{r setup, warning=FALSE, message=FALSE}
 library(tidyverse)     # For ggplot, mutate(), filter(), and friends
 library(broom)         # For converting models to data frames
@@ -51,12 +53,14 @@ hisp <- hisp_raw %>%
   select(-hospital)
 ```
 
+### Background
+
 The World Bank's *Impact Evaluation in Practice* has used a hypothetical example of a health insurance program throughout the book. This Health Insurance Subsidy Program (HISP) provides subsidies for buying private health insurance to poorer households, with the goal of lowering personal health expenditures, since people can rely on insurance coverage instead of paying out-of-pocket. Think of the HISP as a version of the Affordable Care Act (ACA, commonly known as Obamacare).
 
 The dataset includes a number of important variables you'll use throughout this assignment:
 
 | Variable name         | Description                                                      |
-|-----------------------|-------------------------------------------------|
+|-------------------------|-----------------------------------------------|
 | `health_expenditures` | Out of pocket health expenditures (per person per year)          |
 | `eligible`            | Household eligible to enroll in HISP                             |
 | `enrolled`            | Household enrolled in HISP                                       |
@@ -69,7 +73,7 @@ The dataset includes a number of important variables you'll use throughout this 
 It also includes several demographic variables about the households. **Each of these are backdoor confounders between health expenditures participation in the HISP**:
 
 | Variable name       | Description                                               |
-|-----------------------|-------------------------------------------------|
+|-------------------------|-----------------------------------------------|
 | `age_hh`            | Age of the head of household (years)                      |
 | `age_sp`            | Age of the spouse (years)                                 |
 | `educ_hh`           | Education of the head of household (years)                |
@@ -88,17 +92,6 @@ You will use each of the five main econometric approaches for estimating causal 
 
 To measure the effect of HISP accurately, World Bank researchers randomly assigned different localities (villages, towns, cities, whatever) to treatment and control groups. Some localities were allowed to join HISP; others weren't.
 
-Here's what you should do:
-
--   Make a new dataset that only looks at eligible households (`filter(eligible == "Eligible")`)
--   Make a new dataset that only looks at eligible households *after* the experiment (`filter(round == "After")`)
--   Calculate the average health expenditures in treatment and control localities (`treatment_locality`) *before* the intervention (`round == "Before"`). Were expenditures fairly balanced across treatment and control groups before the intervention?
--   Calculate the average health expenditures in treatment and control localities *after* the intervention (`round == "After"`)
--   Determine the difference in average health expenditures across treatment and control *after* the intervention
--   Using data *after* the intervention, use linear regression to determine the difference in means and statistical significance of the difference (hint: you'll want to use `health_expenditures ~ treatment_locality`). Use `lm_robust()` from the **estimatr** package and cluster by `locality_identifier` if you're feeling adventurous.
--   Create another model that controls for the following variables: `age_hh + age_sp + educ_hh + educ_sp + female_hh + indigenous + hhsize + dirtfloor + bathroom + land + hospital_distance`. (Use `lm_robust()` again if you're brave.) Does the estimate of the causal effect change?
--   Show the results from the two regressions in a side-by-side table if you want
-
 ```{r}
 hisp_eligible <- hisp %>% 
   filter(eligible == "Eligible")
@@ -107,26 +100,26 @@ hisp_after <- hisp %>%
   filter(round == "After")
 ```
 
-Below are the average health expenditures for the treatment and control group before the intervention. The control group had an average expenditure of 17.4, and the the treatment group had an average expenditure of 17.0.
+Below are the average health expenditures for the treatment and control group before the intervention. The control group had an average expenditure of 14.6, and the the treatment group had an average expenditure of 14.5.
 
 ```{r}
-hisp %>%
+hisp_eligible %>%
   filter(round == "Before") %>%
   group_by(treatment_locality) %>%
   summarize(mean = mean(health_expenditures))
 ```
 
-After the intervention, the control group's average expenditure increases to 20.1 and the the treatment group's average expenditure decreases to 13.7.
+After the intervention, the control group's average expenditure increases to 17.98 and the the treatment group's average expenditure decreases to 7.84.
 
 ```{r}
-df <- hisp %>%
+df <- hisp_eligible %>%
   filter(round == "After") %>%
   group_by(treatment_locality) %>%
   summarize(mean = mean(health_expenditures))
 df
 ```
 
-The treatment group has an average health expenditure that is 6.41 less than the control group after the intervention.
+The treatment group has an average health expenditure that is 10.1 less than the control group after the intervention.
 
 ```{r}
 diff(df$mean) # Control - Treatment
@@ -155,12 +148,15 @@ tidy(full_linear_model)
 modelsummary(list(
   "Simple Regression" = lm_model,
   "Multiple Regression" = full_linear_model 
-))
+), 
+title = "Health Expenditure on Helath Insurance Program")
 ```
 
 # Task 2: Inverse probability weighting and/or matching
 
-According to the model below, the people who enrolled in the intervention had 12.9 less in health expenditures compared to the non-enrollees. However, this is in inaccurate representation because it includes both compilers and always-takers.
+### Naive Model
+
+According to the model below, the people who enrolled in the intervention had 12.9 less in health expenditures compared to the non-enrollees. However, this is an inaccurate representation because it includes both compilers and always-takers.
 
 ```{r}
 model.naive <- lm(health_expenditures ~ enrolled, 
@@ -168,34 +164,13 @@ model.naive <- lm(health_expenditures ~ enrolled,
 tidy(model.naive)
 ```
 
-***If you're using inverse probability weighting***, do the following:
-
--   Use logistic regression to model the probability of enrolling in the HISP. Hint: you'll need to use `glm()` (replace stuff in `<>` like `<THINGS>` with actual column names or dataset names). Also, note that this code below isn't in an actual R chunk, so don't try to run it.
-
-``` r
-model_logit <- glm(enrolled ~ COUNFOUNDER1 + COUNFOUNDER2 + ...,
-                   data = NAME_OF_YOUR_AFTER_DATASET,
-                   family = binomial(link = "logit"))
-```
-
--   Generate propensity scores for enrollment in the HISP using something like this code (again, this isn't a chunk; don't try to run it):
-
-``` r
-enrolled_propensities <- augment_columns(MODEL_NAME, NAME_OF_YOUR_AFTER_DATASET, 
-                                         type.predict = "response") %>% 
-  rename(p_enrolled = .fitted)                                         
-```
-
--   Add a new column to `enrolled_propensities` with `mutate()` that calculates the inverse probability weights using this formula (hint: "propensity" will be `p_enrolled`; "Treatment" will be `treatment_num`):
+### Inverse Probability Weighting
 
 $$
 \frac{\text{Treatment}}{\text{Propensity}} + \frac{1 - \text{Treatment}}{1 - \text{Propensity}}
 $$
 
--   Run a model that estimates the effect of HISP enrollment on health expenditures (`health_expenditures ~ enrolled`) using the `enrolled_propensities` data, weighting by your new inverse probability weights column. What is the causal effect of HISP on health expenditures? How does this compare to the naive model? Which do you believe more? Why?
--   Show the results from the two regressions in a side-by-side table if you want
-
-Logistic regression to model the probability of enrolling in the HISP.
+Logistic regression to model the probability of enrolling in the HISP based on demographic features.
 
 ```{r}
 model_logit <- glm(enrolled ~ age_hh + age_sp + educ_hh + educ_sp + female_hh + indigenous + hhsize + dirtfloor + bathroom + land + hospital_distance,
@@ -203,14 +178,19 @@ model_logit <- glm(enrolled ~ age_hh + age_sp + educ_hh + educ_sp + female_hh + 
                    family = binomial(link = "logit"))
 ```
 
+Below we fit the logistic regression model to get the probability of enrollment for each observation. When them mutate the probability to create the *inverse probability weighting ratio* (IPW)*.* This ratio gives observations with with weird outcomes more weight.
+
 ```{r}
 enrolled_propensities <- augment_columns(model_logit, hisp_after, 
                                          type.predict = "response") %>% 
                                           rename(p_enrolled = .fitted)  
 
 enrolled_propensities <- enrolled_propensities %>%
-  mutate(inverse_prob = (enrolled_num/p_enrolled)+((1-enrolled_num)/(1-p_enrolled)))
+  mutate(inverse_prob = (enrolled_num/p_enrolled)+((1-enrolled_num)/(1-p_enrolled))) %>%
+  filter(inverse_prob <= 10)
 ```
+
+A new linear model is used, but this time weights are included.
 
 ```{r}
 ipw_model <- lm(health_expenditures ~ enrolled, 
@@ -220,9 +200,12 @@ ipw_model <- lm(health_expenditures ~ enrolled,
 tidy(ipw_model)
 ```
 
+Below the naive model's results show that the effect of being enrolled in the program decreases the health expenditure by 12.87 on average (p\<.01). The IPW model has a smaller coefficient magnitude of 11.00, meaning that participation in the program decrease health expenditure by 11.00 dollars per year. The IPW model can be assumed to be the causal effect, because it accounts for always-takers, and never-takers.
+
 ```{r}
 modelsummary(list(
   "Naive" = model.naive,
   "IPW" = ipw_model
-))
+),
+title = "Health Expenditures on Health Insurance Program")
 ```
