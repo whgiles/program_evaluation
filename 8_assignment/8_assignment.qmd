@@ -1,6 +1,9 @@
 ---
 title: "Problem Set 8"
 author: "W. Hunter Giles"
+execute: 
+  warning: false
+  messages: false
 format: 
     pdf:
       code-line-numbers: true
@@ -60,7 +63,7 @@ The World Bank's *Impact Evaluation in Practice* has used a hypothetical example
 The dataset includes a number of important variables you'll use throughout this assignment:
 
 | Variable name         | Description                                                      |
-|-------------------------|-----------------------------------------------|
+|---------------------------|---------------------------------------------|
 | `health_expenditures` | Out of pocket health expenditures (per person per year)          |
 | `eligible`            | Household eligible to enroll in HISP                             |
 | `enrolled`            | Household enrolled in HISP                                       |
@@ -73,7 +76,7 @@ The dataset includes a number of important variables you'll use throughout this 
 It also includes several demographic variables about the households. **Each of these are backdoor confounders between health expenditures participation in the HISP**:
 
 | Variable name       | Description                                               |
-|-------------------------|-----------------------------------------------|
+|---------------------------|---------------------------------------------|
 | `age_hh`            | Age of the head of household (years)                      |
 | `age_sp`            | Age of the spouse (years)                                 |
 | `educ_hh`           | Education of the head of household (years)                |
@@ -209,3 +212,169 @@ modelsummary(list(
 ),
 title = "Health Expenditures on Health Insurance Program")
 ```
+
+# Task 3: Diff-in-diff
+
+Instead of using experimental data, we can estimate the causal effect using observational data alone with a difference-in-difference approach. We have data indicating if households were enrolled in the program (`enrolled`) and data indicating if they were surveyed before or after the intervention (`round`), which means we can find the differences between enrolled/not enrolled before and after the program.
+
+```{r}
+hisp_tr <- hisp %>% filter(treatment_locality == "Treatment")
+```
+
+Results of the robust difference-and-difference model show that the causal effect of program enrollment reduces health expenditures by 8.16.
+
+```{r}
+dd_model <- lm_robust(health_expenditures ~ enrolled + round + enrolled * round, 
+                      data = hisp_tr,
+                      clusters = locality_identifier)
+tidy(dd_model)
+```
+
+When controlling for other factors in the difference-and-difference model, we see that the causal effect of program enrollment does not change ($\beta = -8.16$).
+
+```{r}
+dd_multi_model <- lm_robust(health_expenditures ~ enrolled + round + enrolled * round + age_hh + age_sp + educ_hh + educ_sp + female_hh + indigenous + hhsize + dirtfloor + bathroom + land + hospital_distance,
+                      data = hisp_tr,
+                      clusters = locality_identifier)
+tidy(dd_multi_model)
+```
+
+```{r}
+modelsummary(list(
+  "DD" = dd_model,
+  "Multi variate DD" = dd_multi_model
+),
+title = "Health Expenditures on Health Insurance Program")
+```
+
+# Task 4: RDD
+
+Eligibility for the HISP is determined by income. Households that have an income of less than 58 on a standardized 1-100 scale (`poverty_index`) qualify for the program and are automatically enrolled. Because we have an arbitrary cutoff in a running variable, we can use regression discontinuity to measure the effect of the program on health expenditures.
+
+Use `mutate()` to add new variable that centers the poverty index variable at 58
+
+```{r}
+hisp_tr <- hisp_tr %>% mutate(
+  poverty_index_centered = poverty_index - 58
+)
+```
+
+Determine if the discontinuity is sharp or fuzzy. (Hint: create a scatterplot with `poverty_index` on the x-axis, `enrolled` on the y-axis, and a vertical line at 58.)
+
+```{r}
+ggplot(hisp_tr) +
+  geom_jitter(aes(poverty_index,enrolled)) +
+  geom_vline(xintercept = 58)
+```
+
+Determine if the distribution of the running variable (`poverty_index`) has a jump near the cutoff (it shouldn't). (Hint: create a histogram with `poverty_index` on the x-axis and a vertical line at 58. Use a McCrary test to see if there's a significant break in the distribution at 58.)
+
+```{r}
+ggplot(hisp_tr) +
+  geom_histogram(aes(poverty_index_centered, ..density..), bins = 50, color = "black", fill = "white") +
+  geom_density(aes(poverty_index_centered), fill = "blue", alpha = .3)
+```
+
+```{r, warning=F, message=F}
+denstest <- rddensity(hisp_tr$poverty_index_centered, c = 0)
+summary(denstest)
+```
+
+Visualize the jump in outcome at the cutoff with a scatterplot (Hint: create a scatterplot with `poverty_index` on the x-axis, `health_expenditures` on the y-xis, color by `enrolled`, add a vertical line at 58, and add trendlines with `geom_smooth(method = "lm")`. You might want to adjust the size and transparency of the points with `geom_point(alpha = 0.2, size = 0.2)` or something similar.)
+
+*From the graph below, we can see a distinct jump in health expenditures above the cutoff, however statistical significance is still in question.*
+
+```{r}
+ggplot(hisp_tr, mapping = aes(poverty_index, health_expenditures, color = enrolled)) +
+  geom_point(alpha = .2) +
+  geom_vline(xintercept = 58) +
+  geom_smooth(aes(group=enrolled), method = "lm", color = "black", se = F)
+```
+
+Build a parametric regression model to estimate the size of the gap at the cutoff. You'll want to use the centered policy index variable to make it easier to interpret. You probably want to create a new dataset that only includes observations within some bandwidth that you choose (`filter(poverty_index_centered >= SOMETHING & poverty_index_centered <= SOMETHING)`). How big is the effect?
+
+*From the results below, we see that program enrollment reduces health expenditures by 6.81.*
+
+```{r}
+rdd_model <- lm(health_expenditures ~ poverty_index_centered + enrolled,
+               data = filter(hisp_tr, poverty_index_centered < 10, poverty_index_centered > -10))
+
+tidy(rdd_model)
+```
+
+Use `rdrobust()` from the **rdrobust** library to estimate the size of the gap nonparametrically. For the sake of simplicity, just use the default (automatic) bandwidth and kernel. How big is the effect?
+
+*From the results below, we see that program enrollment reduces health expenditures by 6.52.*
+
+```{r}
+rdrobust(y = hisp_tr$health_expenditures, x = hisp_tr$poverty_index_centered, c = 0) %>%
+  summary()
+```
+
+# Task 5: IVs/2SLS
+
+Finally, we can use an instrument to remove the endogeneity from the choice to enroll in the HISP and estimate the causal effect from observational data. As you read in chapter 5, World Bank evaluators randomly selected households to receive encouragement to enroll in HISP. You can use this encouragement as an instrument for enrollment.
+
+Build a naive regression model that estimates the effect of HISP enrollment on health expenditures. You'll need to use the `enrolled_rp` variable instead of `enrolled`, since we're measuring enrollment after the encouragement intervention. (Hint: you'll want to use `health_expenditures ~ enrolled_rp`.) What does this naive model tell us about the effect of enrolling in HISP?
+
+*The naive model shows the Intent to Treat (ITT) effect of program enrollment on health expenditures (*$\beta = -12.7$)*. Also, this can be interpreted as the effect of encouragement on health expenditure.*
+
+```{r}
+naive_model <- lm(health_expenditures ~ enrolled_rp, 
+                  data = hisp_after)
+tidy(naive_model)
+```
+
+Check the relevance, exclusion, and exogeneity of promotion (`promotion_locality`) as an instrument. For relevance, you'll want to run a model that predicts enrollment based on promotion (hint: `enrolled_rp ~ promotion_locality`) and check (1) the significance of the coefficient and (2) the F-statistic. For exclusion and exogeneity, you'll have to tell a convincing story that proves promotion influences health expenditures *only through* HISP enrollment.
+
+#### Relevance
+
+The coefficient is significant and the f-stat is greater than 10.
+
+```{r}
+relevance <- lm(enrolled_rp ~ promotion_locality,
+        data = hisp_after,
+        )
+tidy(relevance)
+glance(relevance)
+```
+
+#### Exclusion & Endogeneity
+
+Randomized encouragement passes both the exclusion and endogeneity assumption, because of its inherit "randomness". This means that no other variables are correlated with it except for `enrollment_rp` and `health_expenditures` through `enrollment_rp`
+
+------------------------------------------------------------------------
+
+Run a 2SLS regression model with promotion as the instrument. You can do this by hand if you want (i.e. run a first stage model, extract predicted enrollment, and use predicted enrollment as the second stage), *or* you can just use the `iv_robust()` function from the **estimatr** library. (Hint: you'll want to use `health_expenditures ~ enrolled_rp | promotion_locality` as the formula). After removing the endogeneity from enrollment, what is the casual effect of enrollment in the HISP on health expenditures?
+
+*From the model below, we can see that program enrollment, instrumented by program encouragement, causes a 9.5 decrease in health expenditure.*
+
+```{r}
+iv_model <- iv_robust(health_expenditures ~ enrolled_rp | promotion_locality,
+                      data = hisp_after)
+
+tidy(iv_model)
+```
+
+-   Show the results from the two regressions in a side-by-side table if you want
+
+```{r}
+modelsummary(list(
+  "Naive" = naive_model,
+  "IV" = iv_model
+),
+title = "Health Expenditures on Health Insurance Program")
+```
+
+# Task 6: Summary
+
+| Model        | Beta  |
+|--------------|-------|
+| Naive        | -12.7 |
+| IPW          | -11.0 |
+| Diff-in-Diff | -8.16 |
+| RDD          | -6.81 |
+| IV           | -9.5  |
+|              |       |
+
+All of the models yield the same conclusion that program enrollment significantly reduces the amount of health expenditures paid. There is a question of by out much. One could argue that the true effect is in the range of -6.81 and -12.7.

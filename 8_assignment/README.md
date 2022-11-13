@@ -15,6 +15,11 @@ W. Hunter Giles
   - <a href="#naive-model" id="toc-naive-model">Naive Model</a>
   - <a href="#inverse-probability-weighting"
     id="toc-inverse-probability-weighting">Inverse Probability Weighting</a>
+- <a href="#task-3-diff-in-diff" id="toc-task-3-diff-in-diff">Task 3:
+  Diff-in-diff</a>
+- <a href="#task-4-rdd" id="toc-task-4-rdd">Task 4: RDD</a>
+- <a href="#task-5-ivs2sls" id="toc-task-5-ivs2sls">Task 5: IVs/2SLS</a>
+- <a href="#task-6-summary" id="toc-task-6-summary">Task 6: Summary</a>
 
 ------------------------------------------------------------------------
 
@@ -551,3 +556,670 @@ title = "Health Expenditures on Health Insurance Program")
   </tr>
 </tbody>
 </table>
+
+# Task 3: Diff-in-diff
+
+Instead of using experimental data, we can estimate the causal effect
+using observational data alone with a difference-in-difference approach.
+We have data indicating if households were enrolled in the program
+(`enrolled`) and data indicating if they were surveyed before or after
+the intervention (`round`), which means we can find the differences
+between enrolled/not enrolled before and after the program.
+
+``` r
+hisp_tr <- hisp %>% filter(treatment_locality == "Treatment")
+```
+
+Results of the robust difference-and-difference model show that the
+causal effect of program enrollment reduces health expenditures by 8.16.
+
+``` r
+dd_model <- lm_robust(health_expenditures ~ enrolled + round + enrolled * round, 
+                      data = hisp_tr,
+                      clusters = locality_identifier)
+tidy(dd_model)
+```
+
+                             term estimate std.error statistic  p.value conf.low
+    1                 (Intercept)    20.79     0.174    119.76 2.56e-59    20.44
+    2            enrolledEnrolled    -6.30     0.194    -32.40 1.54e-36    -6.69
+    3                  roundAfter     1.51     0.360      4.21 1.17e-04     0.79
+    4 enrolledEnrolled:roundAfter    -8.16     0.321    -25.44 2.53e-31    -8.81
+      conf.high   df             outcome
+    1     21.14 46.3 health_expenditures
+    2     -5.91 52.8 health_expenditures
+    3      2.24 46.3 health_expenditures
+    4     -7.52 52.8 health_expenditures
+
+When controlling for other factors in the difference-and-difference
+model, we see that the causal effect of program enrollment does not
+change ($\beta = -8.16$).
+
+``` r
+dd_multi_model <- lm_robust(health_expenditures ~ enrolled + round + enrolled * round + age_hh + age_sp + educ_hh + educ_sp + female_hh + indigenous + hhsize + dirtfloor + bathroom + land + hospital_distance,
+                      data = hisp_tr,
+                      clusters = locality_identifier)
+tidy(dd_multi_model)
+```
+
+                              term estimate std.error statistic  p.value conf.low
+    1                  (Intercept) 27.39458   0.56144     48.79 6.16e-45 26.26784
+    2             enrolledEnrolled -1.51276   0.13019    -11.62 2.76e-16 -1.77380
+    3                   roundAfter  1.45053   0.35889      4.04 1.99e-04  0.72822
+    4                       age_hh  0.08049   0.01150      7.00 9.02e-09  0.05734
+    5                       age_sp -0.01972   0.01310     -1.51 1.39e-01 -0.04607
+    6                      educ_hh  0.05999   0.02932      2.05 4.56e-02  0.00121
+    7                      educ_sp -0.07651   0.03426     -2.23 2.98e-02 -0.14526
+    8                    female_hh  1.10393   0.31800      3.47 1.09e-03  0.46485
+    9                   indigenous -2.31199   0.23919     -9.67 4.59e-13 -2.79231
+    10                      hhsize -1.99473   0.03942    -50.60 3.74e-47 -2.07376
+    11                   dirtfloor -2.29984   0.16464    -13.97 2.54e-19 -2.63014
+    12                    bathroom  0.50004   0.15950      3.14 2.84e-03  0.17990
+    13                        land  0.09090   0.02908      3.13 3.67e-03  0.03175
+    14           hospital_distance -0.00319   0.00311     -1.02 3.12e-01 -0.00949
+    15 enrolledEnrolled:roundAfter -8.16150   0.32125    -25.41 2.73e-31 -8.80590
+       conf.high   df             outcome
+    1   28.52132 51.7 health_expenditures
+    2   -1.25172 53.8 health_expenditures
+    3    2.17283 46.3 health_expenditures
+    4    0.10363 46.1 health_expenditures
+    5    0.00662 47.4 health_expenditures
+    6    0.11878 53.5 health_expenditures
+    7   -0.00777 52.0 health_expenditures
+    8    1.74302 48.8 health_expenditures
+    9   -1.83166 50.4 health_expenditures
+    10  -1.91570 54.0 health_expenditures
+    11  -1.96954 52.5 health_expenditures
+    12   0.82019 51.5 health_expenditures
+    13   0.15005 33.2 health_expenditures
+    14   0.00311 39.2 health_expenditures
+    15  -7.51710 52.8 health_expenditures
+
+``` r
+modelsummary(list(
+  "DD" = dd_model,
+  "Multi variate DD" = dd_multi_model
+),
+title = "Health Expenditures on Health Insurance Program")
+```
+
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>Health Expenditures on Health Insurance Program</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;">   </th>
+   <th style="text-align:center;"> DD </th>
+   <th style="text-align:center;"> Multi variate DD </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> (Intercept) </td>
+   <td style="text-align:center;"> 20.791 </td>
+   <td style="text-align:center;"> 27.395 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;"> (0.174) </td>
+   <td style="text-align:center;"> (0.561) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> enrolledEnrolled </td>
+   <td style="text-align:center;"> −6.302 </td>
+   <td style="text-align:center;"> −1.513 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;"> (0.194) </td>
+   <td style="text-align:center;"> (0.130) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> roundAfter </td>
+   <td style="text-align:center;"> 1.513 </td>
+   <td style="text-align:center;"> 1.451 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;"> (0.360) </td>
+   <td style="text-align:center;"> (0.359) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> enrolledEnrolled × roundAfter </td>
+   <td style="text-align:center;"> −8.163 </td>
+   <td style="text-align:center;"> −8.161 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;"> (0.321) </td>
+   <td style="text-align:center;"> (0.321) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> age_hh </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> 0.080 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.011) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> age_sp </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> −0.020 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.013) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> educ_hh </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> 0.060 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.029) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> educ_sp </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> −0.077 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.034) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> female_hh </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> 1.104 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.318) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> indigenous </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> −2.312 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.239) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> hhsize </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> −1.995 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.039) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> dirtfloor </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> −2.300 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.165) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> bathroom </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> 0.500 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.160) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> land </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> 0.091 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> (0.029) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> hospital_distance </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> −0.003 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;box-shadow: 0px 1px">  </td>
+   <td style="text-align:center;box-shadow: 0px 1px">  </td>
+   <td style="text-align:center;box-shadow: 0px 1px"> (0.003) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Num.Obs. </td>
+   <td style="text-align:center;"> 9919 </td>
+   <td style="text-align:center;"> 9919 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> R2 </td>
+   <td style="text-align:center;"> 0.344 </td>
+   <td style="text-align:center;"> 0.552 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> R2 Adj. </td>
+   <td style="text-align:center;"> 0.343 </td>
+   <td style="text-align:center;"> 0.551 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Std.Errors </td>
+   <td style="text-align:center;"> by: locality_identifier </td>
+   <td style="text-align:center;"> by: locality_identifier </td>
+  </tr>
+</tbody>
+</table>
+
+# Task 4: RDD
+
+Eligibility for the HISP is determined by income. Households that have
+an income of less than 58 on a standardized 1-100 scale
+(`poverty_index`) qualify for the program and are automatically
+enrolled. Because we have an arbitrary cutoff in a running variable, we
+can use regression discontinuity to measure the effect of the program on
+health expenditures.
+
+Use `mutate()` to add new variable that centers the poverty index
+variable at 58
+
+``` r
+hisp_tr <- hisp_tr %>% mutate(
+  poverty_index_centered = poverty_index - 58
+)
+```
+
+Determine if the discontinuity is sharp or fuzzy. (Hint: create a
+scatterplot with `poverty_index` on the x-axis, `enrolled` on the
+y-axis, and a vertical line at 58.)
+
+``` r
+ggplot(hisp_tr) +
+  geom_jitter(aes(poverty_index,enrolled)) +
+  geom_vline(xintercept = 58)
+```
+
+![](8_assignment_files/figure-gfm/unnamed-chunk-36-1.png)
+
+Determine if the distribution of the running variable (`poverty_index`)
+has a jump near the cutoff (it shouldn’t). (Hint: create a histogram
+with `poverty_index` on the x-axis and a vertical line at 58. Use a
+McCrary test to see if there’s a significant break in the distribution
+at 58.)
+
+``` r
+ggplot(hisp_tr) +
+  geom_histogram(aes(poverty_index_centered, ..density..), bins = 50, color = "black", fill = "white") +
+  geom_density(aes(poverty_index_centered), fill = "blue", alpha = .3)
+```
+
+![](8_assignment_files/figure-gfm/unnamed-chunk-38-1.png)
+
+``` r
+denstest <- rddensity(hisp_tr$poverty_index_centered, c = 0)
+summary(denstest)
+```
+
+
+    Manipulation testing using local polynomial density estimation.
+
+    Number of obs =       9919
+    Model =               unrestricted
+    Kernel =              triangular
+    BW method =           estimated
+    VCE method =          jackknife
+
+    c = 0                 Left of c           Right of c          
+    Number of obs         5929                3990                
+    Eff. Number of obs    1858                1992                
+    Order est. (p)        2                   2                   
+    Order bias (q)        3                   3                   
+    BW est. (h)           4.81                5.673               
+
+    Method                T                   P > |T|             
+    Robust                -0.6822             0.4951              
+
+
+    P-values of binomial tests (H0: p=0.5).
+
+    Window Length / 2          <c     >=c    P>|T|
+    0.114                      16      14    0.8555
+    0.229                      58      32    0.0080
+    0.343                      98      66    0.0152
+    0.457                     148     122    0.1280
+    0.572                     186     160    0.1789
+    0.686                     242     202    0.0641
+    0.801                     274     254    0.4083
+    0.915                     320     288    0.2086
+    1.029                     362     318    0.0991
+    1.144                     428     376    0.0720
+
+Visualize the jump in outcome at the cutoff with a scatterplot (Hint:
+create a scatterplot with `poverty_index` on the x-axis,
+`health_expenditures` on the y-xis, color by `enrolled`, add a vertical
+line at 58, and add trendlines with `geom_smooth(method = "lm")`. You
+might want to adjust the size and transparency of the points with
+`geom_point(alpha = 0.2, size = 0.2)` or something similar.)
+
+*From the graph below, we can see a distinct jump in health expenditures
+above the cutoff, however statistical significance is still in
+question.*
+
+``` r
+ggplot(hisp_tr, mapping = aes(poverty_index, health_expenditures, color = enrolled)) +
+  geom_point(alpha = .2) +
+  geom_vline(xintercept = 58) +
+  geom_smooth(aes(group=enrolled), method = "lm", color = "black", se = F)
+```
+
+![](8_assignment_files/figure-gfm/unnamed-chunk-42-1.png)
+
+Build a parametric regression model to estimate the size of the gap at
+the cutoff. You’ll want to use the centered policy index variable to
+make it easier to interpret. You probably want to create a new dataset
+that only includes observations within some bandwidth that you choose
+(`filter(poverty_index_centered >= SOMETHING & poverty_index_centered <= SOMETHING)`).
+How big is the effect?
+
+*From the results below, we see that program enrollment reduces health
+expenditures by 6.81.*
+
+``` r
+rdd_model <- lm(health_expenditures ~ poverty_index_centered + enrolled,
+               data = filter(hisp_tr, poverty_index_centered < 10, poverty_index_centered > -10))
+
+tidy(rdd_model)
+```
+
+    # A tibble: 3 × 5
+      term                   estimate std.error statistic  p.value
+      <chr>                     <dbl>     <dbl>     <dbl>    <dbl>
+    1 (Intercept)              20.0      0.220      90.8  0       
+    2 poverty_index_centered    0.236    0.0367      6.45 1.21e-10
+    3 enrolledEnrolled         -6.82     0.392     -17.4  2.90e-66
+
+Use `rdrobust()` from the **rdrobust** library to estimate the size of
+the gap nonparametrically. For the sake of simplicity, just use the
+default (automatic) bandwidth and kernel. How big is the effect?
+
+*From the results below, we see that program enrollment reduces health
+expenditures by 6.52.*
+
+``` r
+rdrobust(y = hisp_tr$health_expenditures, x = hisp_tr$poverty_index_centered, c = 0) %>%
+  summary()
+```
+
+    Sharp RD estimates using local polynomial regression.
+
+    Number of Obs.                 9919
+    BW type                       mserd
+    Kernel                   Triangular
+    VCE method                       NN
+
+    Number of Obs.                 5929         3990
+    Eff. Number of Obs.            2498         2130
+    Order est. (p)                    1            1
+    Order bias  (q)                   2            2
+    BW est. (h)                   6.359        6.359
+    BW bias (b)                  10.803       10.803
+    rho (h/b)                     0.589        0.589
+    Unique Obs.                     717          669
+
+    =============================================================================
+            Method     Coef. Std. Err.         z     P>|z|      [ 95% C.I. ]       
+    =============================================================================
+      Conventional     6.523     0.512    12.729     0.000     [5.519 , 7.528]     
+            Robust         -         -    10.590     0.000     [5.236 , 7.614]     
+    =============================================================================
+
+# Task 5: IVs/2SLS
+
+Finally, we can use an instrument to remove the endogeneity from the
+choice to enroll in the HISP and estimate the causal effect from
+observational data. As you read in chapter 5, World Bank evaluators
+randomly selected households to receive encouragement to enroll in HISP.
+You can use this encouragement as an instrument for enrollment.
+
+Build a naive regression model that estimates the effect of HISP
+enrollment on health expenditures. You’ll need to use the `enrolled_rp`
+variable instead of `enrolled`, since we’re measuring enrollment after
+the encouragement intervention. (Hint: you’ll want to use
+`health_expenditures ~ enrolled_rp`.) What does this naive model tell us
+about the effect of enrolling in HISP?
+
+*The naive model shows the Intent to Treat (ITT) effect of program
+enrollment on health expenditures (*$\beta = -12.7$)*. Also, this can be
+interpreted as the effect of encouragement on health expenditure.*
+
+``` r
+naive_model <- lm(health_expenditures ~ enrolled_rp, 
+                  data = hisp_after)
+tidy(naive_model)
+```
+
+    # A tibble: 2 × 5
+      term        estimate std.error statistic p.value
+      <chr>          <dbl>     <dbl>     <dbl>   <dbl>
+    1 (Intercept)     20.6     0.124     166.        0
+    2 enrolled_rp    -12.7     0.229     -55.5       0
+
+Check the relevance, exclusion, and exogeneity of promotion
+(`promotion_locality`) as an instrument. For relevance, you’ll want to
+run a model that predicts enrollment based on promotion (hint:
+`enrolled_rp ~ promotion_locality`) and check (1) the significance of
+the coefficient and (2) the F-statistic. For exclusion and exogeneity,
+you’ll have to tell a convincing story that proves promotion influences
+health expenditures *only through* HISP enrollment.
+
+#### Relevance
+
+The coefficient is significant and the f-stat is greater than 10.
+
+``` r
+relevance <- lm(enrolled_rp ~ promotion_locality,
+        data = hisp_after,
+        )
+tidy(relevance)
+```
+
+    # A tibble: 2 × 5
+      term                        estimate std.error statistic  p.value
+      <chr>                          <dbl>     <dbl>     <dbl>    <dbl>
+    1 (Intercept)                   0.0842   0.00586      14.4 1.97e-46
+    2 promotion_localityPromotion   0.408    0.00818      49.8 0       
+
+``` r
+glance(relevance)
+```
+
+    # A tibble: 1 × 12
+      r.squared adj.r.squared sigma statistic p.value    df logLik    AIC    BIC
+          <dbl>         <dbl> <dbl>     <dbl>   <dbl> <dbl>  <dbl>  <dbl>  <dbl>
+    1     0.200         0.200 0.407     2485.       0     1 -5158. 10322. 10343.
+    # … with 3 more variables: deviance <dbl>, df.residual <int>, nobs <int>
+
+#### Exclusion & Endogeneity
+
+Randomized encouragement passes both the exclusion and endogeneity
+assumption, because of its inherit “randomness”. This means that no
+other variables are correlated with it except for `enrollment_rp` and
+`health_expenditures` through `enrollment_rp`
+
+------------------------------------------------------------------------
+
+Run a 2SLS regression model with promotion as the instrument. You can do
+this by hand if you want (i.e. run a first stage model, extract
+predicted enrollment, and use predicted enrollment as the second stage),
+*or* you can just use the `iv_robust()` function from the **estimatr**
+library. (Hint: you’ll want to use
+`health_expenditures ~ enrolled_rp | promotion_locality` as the
+formula). After removing the endogeneity from enrollment, what is the
+casual effect of enrollment in the HISP on health expenditures?
+
+*From the model below, we can see that program enrollment, instrumented
+by program encouragement, causes a 9.5 decrease in health expenditure.*
+
+``` r
+iv_model <- iv_robust(health_expenditures ~ enrolled_rp | promotion_locality,
+                      data = hisp_after)
+
+tidy(iv_model)
+```
+
+             term estimate std.error statistic  p.value conf.low conf.high   df
+    1 (Intercept)     19.6     0.181     108.8 0.00e+00     19.3     20.00 9912
+    2 enrolled_rp     -9.5     0.516     -18.4 2.29e-74    -10.5     -8.49 9912
+                  outcome
+    1 health_expenditures
+    2 health_expenditures
+
+- Show the results from the two regressions in a side-by-side table if
+  you want
+
+``` r
+modelsummary(list(
+  "Naive" = naive_model,
+  "IV" = iv_model
+),
+title = "Health Expenditures on Health Insurance Program")
+```
+
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>Health Expenditures on Health Insurance Program</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;">   </th>
+   <th style="text-align:center;"> Naive </th>
+   <th style="text-align:center;"> IV </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> (Intercept) </td>
+   <td style="text-align:center;"> 20.587 </td>
+   <td style="text-align:center;"> 19.646 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:center;"> (0.124) </td>
+   <td style="text-align:center;"> (0.181) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> enrolled_rp </td>
+   <td style="text-align:center;"> −12.708 </td>
+   <td style="text-align:center;"> −9.500 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;box-shadow: 0px 1px">  </td>
+   <td style="text-align:center;box-shadow: 0px 1px"> (0.229) </td>
+   <td style="text-align:center;box-shadow: 0px 1px"> (0.516) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Num.Obs. </td>
+   <td style="text-align:center;"> 9914 </td>
+   <td style="text-align:center;"> 9914 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> R2 </td>
+   <td style="text-align:center;"> 0.237 </td>
+   <td style="text-align:center;"> 0.222 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> R2 Adj. </td>
+   <td style="text-align:center;"> 0.237 </td>
+   <td style="text-align:center;"> 0.222 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> AIC </td>
+   <td style="text-align:center;"> 74549.2 </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> BIC </td>
+   <td style="text-align:center;"> 74570.8 </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Log.Lik. </td>
+   <td style="text-align:center;"> −37271.617 </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> F </td>
+   <td style="text-align:center;"> 3075.623 </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> RMSE </td>
+   <td style="text-align:center;"> 10.39 </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Std.Errors </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;"> HC2 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> statistic.endogeneity </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> p.value.endogeneity </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> statistic.weakinst </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> p.value.weakinst </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> statistic.overid </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> p.value.overid </td>
+   <td style="text-align:center;">  </td>
+   <td style="text-align:center;">  </td>
+  </tr>
+</tbody>
+</table>
+
+# Task 6: Summary
+
+| Model        | Beta  |
+|--------------|-------|
+| Naive        | -12.7 |
+| IPW          | -11.0 |
+| Diff-in-Diff | -8.16 |
+| RDD          | -6.81 |
+| IV           | -9.5  |
+|              |       |
+
+All of the models yield the same conclusion that program enrollment
+significantly reduces the amount of health expenditures paid. There is a
+question of by out much. One could argue that the true effect is in the
+range of -6.81 and -12.7.
